@@ -93,10 +93,10 @@ pub fn setupVerticesForComplexCitizens(state: *main.ChatSimState, citizenCount: 
                 },
                 state,
             );
-            for (chunk.citizens.items) |*citizen| {
+            for (chunk.citizens.citizens.items, 0..) |*citizen, citizenIndex| {
                 const animationTimer = if (citizen.nextThinkingAction != .idle and citizen.nextThinkingTickTimeMs > state.gameTimeMs) citizen.nextThinkingTickTimeMs - state.gameTimeMs else state.gameTimeMs;
                 vkState.citizen.vertices[index] = .{
-                    .pos = .{ citizen.position.x, citizen.position.y },
+                    .pos = .{ chunk.citizens.posX.items[citizenIndex], chunk.citizens.posY.items[citizenIndex] },
                     .imageIndex = citizen.imageIndex,
                     .animationTimer = animationTimer,
                     .moveSpeed = if (citizen.moveTo.items.len > 0) @floatCast(citizen.moveSpeed) else 0,

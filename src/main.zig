@@ -1,6 +1,7 @@
 const std = @import("std");
 const expect = @import("std").testing.expect;
 pub const Citizen = @import("citizen.zig").Citizen;
+pub const Citizens = @import("citizen.zig").Citizens;
 const mapZig = @import("map.zig");
 const paintVulkanZig = @import("vulkan/paintVulkan.zig");
 const windowSdlZig = @import("windowSdl.zig");
@@ -401,8 +402,7 @@ pub fn destroyGameState(state: *ChatSimState) void {
         chunk.bigBuildings.deinit();
         chunk.trees.deinit();
         chunk.potatoFields.deinit();
-        Citizen.destroyCitizens(chunk);
-        chunk.citizens.deinit();
+        Citizens.destroy(chunk);
         chunk.buildOrders.deinit();
         chunk.pathes.deinit();
         chunk.queue.deinit();

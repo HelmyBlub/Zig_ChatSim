@@ -4,6 +4,7 @@ tasks:
 
 - bug: deleting can crash game
     - integer overflow, D:\mein\github_gamedev\Zig_ChatSim\src\citizen.zig:356:31: 0x7ff7f71f682c in buildingFinished (zig.exe.obj),  building.woodRequired -= 1;
+- initial citizen home does not block path
 
 - features:
     - performance            
@@ -18,10 +19,8 @@ tasks:
         - this docu somehow hard do understand for me. Unsure in what cases it helps or if i need more knowledge first
   
 Some data:
-- FPS: 127, citizens: 25053, gameTime: 322096, end FPS: 77.300476 (13.05.2025)
-- ~70_000 citizen my cpu can not keep 60fps anymore(while streamng + debug mode)
-- FPS: 146, citizens: 26400, gameTime: 340752, end FPS: 100.87423 (save citizen direction instead of recalculating each tick)
-- FPS: 140, citizens: 29944, gameTime: 334736, end FPS: 92.22591 (increase copy paste area)
+- FPS: 140, citizens: 29944, gameTime: 334736, end FPS: 92.22591
+- ~92000 citizen my cpu can not keep 60fps anymore(while streamng + debug mode)
 
 Goal:
 - a game which should not take more than 6month to make. Maybe publish to steam.

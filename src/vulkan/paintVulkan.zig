@@ -227,7 +227,7 @@ fn setupVerticesForCitizens(state: *main.ChatSimState) !void {
                 },
                 state,
             );
-            entityPaintCountLayer1Citizen += chunk.citizens.items.len;
+            entityPaintCountLayer1Citizen += chunk.citizens.citizens.items.len;
             entityPaintCountLayer1 += chunk.buildings.items.len;
             entityPaintCountLayer1 += chunk.bigBuildings.items.len;
             entityPaintCountLayer1 += chunk.trees.items.len;
@@ -273,8 +273,8 @@ fn setupVerticesForCitizens(state: *main.ChatSimState) !void {
                 state,
             );
             if (!doComplexCitizen) {
-                for (chunk.citizens.items) |*citizen| {
-                    vkState.vertices[indexLayer1Citizen] = .{ .pos = .{ citizen.position.x, citizen.position.y }, .imageIndex = citizen.imageIndex, .size = mapZig.GameMap.TILE_SIZE, .rotate = 0, .cutY = 0 };
+                for (chunk.citizens.citizens.items, 0..) |*citizen, citizenIndex| {
+                    vkState.vertices[indexLayer1Citizen] = .{ .pos = .{ chunk.citizens.posX.items[citizenIndex], chunk.citizens.posY.items[citizenIndex] }, .imageIndex = citizen.imageIndex, .size = mapZig.GameMap.TILE_SIZE, .rotate = 0, .cutY = 0 };
                     indexLayer1Citizen += 1;
                 }
             }
