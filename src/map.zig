@@ -872,7 +872,7 @@ fn createChunk(chunkXY: ChunkXY, allocator: std.mem.Allocator, state: *main.Chat
         .pathingData = try main.pathfindingZig.createChunkData(chunkXY, allocator, state),
         .queue = std.ArrayList(ChunkQueueItem).init(allocator),
     };
-    try main.Citizens.init(&mapChunk, allocator);
+    try main.Citizens.init(&mapChunk.citizens, allocator);
 
     for (0..GameMap.CHUNK_LENGTH) |x| {
         for (0..GameMap.CHUNK_LENGTH) |y| {
@@ -908,7 +908,7 @@ pub fn createSpawnChunk(allocator: std.mem.Allocator, state: *main.ChatSimState)
         .pathingData = try main.pathfindingZig.createChunkData(.{ .chunkX = 0, .chunkY = 0 }, allocator, state),
         .queue = std.ArrayList(ChunkQueueItem).init(allocator),
     };
-    try main.Citizens.init(&spawnChunk, allocator);
+    try main.Citizens.init(&spawnChunk.citizens, allocator);
     const halveTileSize = GameMap.TILE_SIZE / 2;
     try spawnChunk.buildings.append(.{ .position = .{ .x = halveTileSize, .y = halveTileSize }, .inConstruction = false, .type = BUILDING_TYPE_HOUSE, .citizensSpawned = 1 });
     try spawnChunk.trees.append(.{ .position = .{ .x = GameMap.TILE_SIZE + halveTileSize, .y = halveTileSize }, .fullyGrown = true });

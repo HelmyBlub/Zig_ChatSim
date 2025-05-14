@@ -2,7 +2,6 @@ tasks:
 - performance
     - check code for performance improvement for single cpu and simd
         - citizen move
-            - continue: citizen movement broken
         - data to gpu?
     - single cpu
         - pathfinding still searches for fastest, simplify to a "decent" path

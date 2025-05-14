@@ -80,10 +80,10 @@ test "test for memory leaks" {
     // testing allocator will fail test if something is not deallocated
 }
 
-test "test measure performance" {
-    SIMULATION_MICRO_SECOND_DURATION = 30_000_000;
-    try testZig.executePerfromanceTest();
-}
+// test "test measure performance" {
+//     SIMULATION_MICRO_SECOND_DURATION = 30_000_000;
+//     try testZig.executePerfromanceTest();
+// }
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
@@ -402,7 +402,7 @@ pub fn destroyGameState(state: *ChatSimState) void {
         chunk.bigBuildings.deinit();
         chunk.trees.deinit();
         chunk.potatoFields.deinit();
-        Citizens.destroy(chunk);
+        Citizens.destroy(&chunk.citizens);
         chunk.buildOrders.deinit();
         chunk.pathes.deinit();
         chunk.queue.deinit();

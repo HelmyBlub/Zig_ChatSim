@@ -31,12 +31,12 @@ pub const Citizens = struct {
     moveTargetPosX: std.ArrayList(f32),
     moveTargetPosY: std.ArrayList(f32),
 
-    pub fn init(chunk: *mapZig.MapChunk, allocator: std.mem.Allocator) !void {
-        chunk.citizens.citizens = std.ArrayList(Citizen).init(allocator);
-        chunk.citizens.posX = std.ArrayList(f32).init(allocator);
-        chunk.citizens.posY = std.ArrayList(f32).init(allocator);
-        chunk.citizens.direction = std.ArrayList(f32).init(allocator);
-        chunk.citizens.moveSpeed = std.ArrayList(f16).init(allocator);
+    pub fn init(citizens: *main.Citizens, allocator: std.mem.Allocator) !void {
+        citizens.citizens = std.ArrayList(Citizen).init(allocator);
+        citizens.posX = std.ArrayList(f32).init(allocator);
+        citizens.posY = std.ArrayList(f32).init(allocator);
+        citizens.direction = std.ArrayList(f32).init(allocator);
+        citizens.moveSpeed = std.ArrayList(f16).init(allocator);
     }
 
     pub fn ensureUnusedCapacity(chunkCitizens: *Citizens, size: usize) !void {
@@ -47,13 +47,13 @@ pub const Citizens = struct {
         try chunkCitizens.moveSpeed.ensureUnusedCapacity(size);
     }
 
-    pub fn destroy(chunk: *mapZig.MapChunk) void {
-        Citizen.destroyCitizens(chunk);
-        chunk.citizens.citizens.deinit();
-        chunk.citizens.posX.deinit();
-        chunk.citizens.posY.deinit();
-        chunk.citizens.direction.deinit();
-        chunk.citizens.moveSpeed.deinit();
+    pub fn destroy(citizens: *Citizens) void {
+        Citizen.destroyCitizens(citizens);
+        citizens.citizens.deinit();
+        citizens.posX.deinit();
+        citizens.posY.deinit();
+        citizens.direction.deinit();
+        citizens.moveSpeed.deinit();
     }
 
     pub fn appendCitizen(citizen: Citizen, posX: f32, posY: f32, chunkCitizens: *Citizens) !void {
@@ -108,8 +108,8 @@ pub const Citizen: type = struct {
         };
     }
 
-    pub fn destroyCitizens(chunk: *mapZig.MapChunk) void {
-        for (chunk.citizens.citizens.items) |*citizen| {
+    pub fn destroyCitizens(citizens: *Citizens) void {
+        for (citizens.citizens.items) |*citizen| {
             citizen.moveTo.deinit();
         }
     }
