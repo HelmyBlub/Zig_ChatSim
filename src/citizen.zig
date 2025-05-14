@@ -36,6 +36,7 @@ pub const Citizens = struct {
         chunk.citizens.posX = std.ArrayList(f32).init(allocator);
         chunk.citizens.posY = std.ArrayList(f32).init(allocator);
         chunk.citizens.direction = std.ArrayList(f32).init(allocator);
+        chunk.citizens.moveSpeed = std.ArrayList(f16).init(allocator);
     }
 
     pub fn ensureUnusedCapacity(chunkCitizens: *Citizens, size: usize) !void {
@@ -43,6 +44,7 @@ pub const Citizens = struct {
         try chunkCitizens.posX.ensureUnusedCapacity(size);
         try chunkCitizens.posY.ensureUnusedCapacity(size);
         try chunkCitizens.direction.ensureUnusedCapacity(size);
+        try chunkCitizens.moveSpeed.ensureUnusedCapacity(size);
     }
 
     pub fn destroy(chunk: *mapZig.MapChunk) void {
@@ -51,13 +53,15 @@ pub const Citizens = struct {
         chunk.citizens.posX.deinit();
         chunk.citizens.posY.deinit();
         chunk.citizens.direction.deinit();
+        chunk.citizens.moveSpeed.deinit();
     }
 
-    pub fn appendCitizen(citizen: Citizen, posX: f32, posY: f32, direction: f32, chunkCitizens: *Citizens) !void {
+    pub fn appendCitizen(citizen: Citizen, posX: f32, posY: f32, chunkCitizens: *Citizens) !void {
         try chunkCitizens.citizens.append(citizen);
         try chunkCitizens.posX.append(posX);
         try chunkCitizens.posY.append(posY);
-        try chunkCitizens.direction.append(direction);
+        try chunkCitizens.direction.append(0);
+        try chunkCitizens.moveSpeed.append(Citizen.MOVE_SPEED_NORMAL);
     }
 
     pub fn swapRemoveCitizen(index: usize, chunkCitizens: *Citizens) void {
@@ -65,6 +69,7 @@ pub const Citizens = struct {
         _ = chunkCitizens.posX.swapRemove(index);
         _ = chunkCitizens.posY.swapRemove(index);
         _ = chunkCitizens.direction.swapRemove(index);
+        _ = chunkCitizens.moveSpeed.swapRemove(index);
     }
 
     pub fn moveCitizenToOtherChunk(index: usize, chunkCitizensOld: *Citizens, chunkCitizensNew: *Citizens) !void {
@@ -72,11 +77,11 @@ pub const Citizens = struct {
         try chunkCitizensNew.posX.append(chunkCitizensOld.posX.swapRemove(index));
         try chunkCitizensNew.posY.append(chunkCitizensOld.posY.swapRemove(index));
         try chunkCitizensNew.direction.append(chunkCitizensOld.direction.swapRemove(index));
+        try chunkCitizensNew.moveSpeed.append(chunkCitizensOld.moveSpeed.swapRemove(index));
     }
 };
 
 pub const Citizen: type = struct {
-    moveSpeed: f16,
     moveTo: std.ArrayList(main.Position),
     imageIndex: u8 = imageZig.IMAGE_CITIZEN_FRONT,
     buildingPosition: ?main.Position = null,
@@ -99,7 +104,6 @@ pub const Citizen: type = struct {
 
     pub fn createCitizen(allocator: std.mem.Allocator) Citizen {
         return Citizen{
-            .moveSpeed = Citizen.MOVE_SPEED_NORMAL,
             .moveTo = std.ArrayList(main.Position).init(allocator),
         };
     }
@@ -118,7 +122,7 @@ pub const Citizen: type = struct {
             const citizen: *Citizen = &chunk.citizens.citizens.items[i];
             const citizenPos: main.Position = .{ .x = chunk.citizens.posX.items[i], .y = chunk.citizens.posY.items[i] };
             try codePerformanceZig.startMeasure("   foodTick", &state.codePerformanceData);
-            try foodTick(citizen, citizenPos, state);
+            try foodTick(citizen, citizenPos, i, &chunk.citizens, state);
             codePerformanceZig.endMeasure("   foodTick", &state.codePerformanceData);
             try codePerformanceZig.startMeasure("   thinkTick", &state.codePerformanceData);
             try thinkTick(citizen, citizenPos, i, &chunk.citizens, state);
@@ -158,14 +162,19 @@ pub const Citizen: type = struct {
     pub fn citizenMove(citizen: *Citizen, index: usize, citizens: Citizens) void {
         if (citizen.moveTo.items.len > 0) {
             const moveTo = citizen.moveTo.getLast();
-            var moveSpeed = citizen.moveSpeed;
+            var moveSpeed = citizens.moveSpeed.items[index];
+            const directionPtr = &citizens.direction.items[index];
+            const posXPtr = &citizens.posX.items[index];
+            const posYPtr = &citizens.posY.items[index];
             if (citizen.hasWood) moveSpeed *= MOVE_SPEED_WODD_FACTOR;
-            citizens.posX.items[index] += std.math.cos(citizens.direction.items[index]) * moveSpeed;
-            citizens.posY.items[index] += std.math.sin(citizens.direction.items[index]) * moveSpeed;
-            if (@abs(citizens.posX.items[index] - moveTo.x) < citizen.moveSpeed and @abs(citizens.posY.items[index] - moveTo.y) < citizen.moveSpeed) {
+            posXPtr.* += std.math.cos(directionPtr.*) * moveSpeed;
+            posYPtr.* += std.math.sin(directionPtr.*) * moveSpeed;
+            const posX = posXPtr.*;
+            const posY = posYPtr.*;
+            if (@abs(posX - moveTo.x) < moveSpeed and @abs(posY - moveTo.y) < moveSpeed) {
                 _ = citizen.moveTo.pop();
-                if (citizen.moveTo.items.len > 0) citizens.direction.items[index] = main.calculateDirection(.{ .x = citizens.posX.items[index], .y = citizens.posY.items[index] }, citizen.moveTo.getLast());
-                recalculateCitizenImageIndex(citizen, .{ .x = citizens.posX.items[index], .y = citizens.posY.items[index] });
+                if (citizen.moveTo.items.len > 0) directionPtr.* = main.calculateDirection(.{ .x = posX, .y = posY }, citizen.moveTo.getLast());
+                recalculateCitizenImageIndex(citizen, .{ .x = posX, .y = posY });
             }
         }
     }
@@ -218,7 +227,7 @@ fn thinkTick(citizen: *Citizen, citizenPos: main.Position, citizenIndex: usize, 
             try potatoEatTick(citizen, citizenPos, state);
         },
         .potatoEatFinished => {
-            try potatoEatFinishedTick(citizen, citizenPos, state);
+            try potatoEatFinishedTick(citizen, citizenPos, citizenIndex, chunkCitizens, state);
         },
         .potatoPlant => {
             try potatoPlant(citizen, citizenPos, citizenIndex, chunkCitizens, state);
@@ -480,12 +489,12 @@ fn potatoHarvestTick(citizen: *Citizen, citizenPos: main.Position, citizenIndex:
     }
 }
 
-fn potatoEatFinishedTick(citizen: *Citizen, citizenPos: main.Position, state: *main.ChatSimState) !void {
+fn potatoEatFinishedTick(citizen: *Citizen, citizenPos: main.Position, citizenIndex: usize, chunkCitizens: *Citizens, state: *main.ChatSimState) !void {
     citizen.hasPotato = false;
     citizen.potatoPosition = null;
     eatFood(0.5, citizen, state);
-    if (citizen.foodLevel > 0 and citizen.moveSpeed == Citizen.MOVE_SPEED_STARVING) {
-        citizen.moveSpeed = Citizen.MOVE_SPEED_NORMAL;
+    if (citizen.foodLevel > 0 and chunkCitizens.moveSpeed.items[citizenIndex] == Citizen.MOVE_SPEED_STARVING) {
+        chunkCitizens.moveSpeed.items[citizenIndex] = Citizen.MOVE_SPEED_NORMAL;
     }
     try nextThinkingAction(citizen, citizenPos, state);
 }
@@ -554,7 +563,7 @@ fn eatFood(foodAmount: f32, citizen: *Citizen, state: *main.ChatSimState) void {
     }
 }
 
-fn foodTick(citizen: *Citizen, citizenPos: main.Position, state: *main.ChatSimState) !void {
+fn foodTick(citizen: *Citizen, citizenPos: main.Position, citizenIndex: usize, chunkCitizens: *Citizens, state: *main.ChatSimState) !void {
     if (citizen.nextFoodTickTimeMs > state.gameTimeMs) return;
     if (citizen.foodLevelLastUpdateTimeMs == 0) {
         citizen.foodLevelLastUpdateTimeMs = state.gameTimeMs;
@@ -570,8 +579,8 @@ fn foodTick(citizen: *Citizen, citizenPos: main.Position, state: *main.ChatSimSt
         citizen.nextFoodTickTimeMs = state.gameTimeMs + timeUntilStarving;
     } else {
         citizen.nextFoodTickTimeMs = state.gameTimeMs + 15_000;
-        if (citizen.moveSpeed == Citizen.MOVE_SPEED_NORMAL and citizen.foodLevel <= 0) {
-            citizen.moveSpeed = Citizen.MOVE_SPEED_STARVING;
+        if (chunkCitizens.moveSpeed.items[citizenIndex] == Citizen.MOVE_SPEED_NORMAL and citizen.foodLevel <= 0) {
+            chunkCitizens.moveSpeed.items[citizenIndex] = Citizen.MOVE_SPEED_STARVING;
         }
     }
 }

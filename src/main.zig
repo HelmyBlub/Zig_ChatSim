@@ -280,7 +280,7 @@ pub fn mainLoop(state: *ChatSimState) !void {
             std.time.sleep(sleepTime * 1_000);
         }
         const thisFrameFps = @divFloor(1_000_000, @as(u64, @intCast((std.time.microTimestamp() - startTime))));
-        state.fpsCounter = state.fpsCounter * 0.8 + @as(f32, @floatFromInt(thisFrameFps)) * 0.2;
+        state.fpsCounter = state.fpsCounter * 0.9 + @as(f32, @floatFromInt(thisFrameFps)) * 0.1;
 
         const totalPassedTime: i64 = std.time.microTimestamp() - totalStartTime;
         if (SIMULATION_MICRO_SECOND_DURATION) |duration| {

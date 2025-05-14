@@ -29,8 +29,12 @@ Some data:
 - ~92000 citizen my cpu can not keep 60fps anymore(while streamng + debug mode)
 
 - FPS: 135, citizens: 29255, gameTime: 330176, end FPS: 81.20543 (changed citizen posX and posY into array to prepare for simd)
-- FPS: 133, citizens: 28924, gameTime: 328224, end FPS: 74.11619 (changed direction)
-- FPS: 139, citizens: 29804, gameTime: 333776, end FPS: 81.204216 (arena allocator)
+- FPS: 134, citizens: 29081, gameTime: 329248, end FPS: 81.15769 (changed direction)
+- FPS: 139, citizens: 29804, gameTime: 333776, end FPS: 81.204216 (direction + arena allocator, but code crashes a lot)
+- FPS: 139, citizens: 29512, gameTime: 333552, end FPS: 80.07072 (changed moveSpeed)
+- FPS: 139, citizens: 29631, gameTime: 334368, end FPS: 82.88028 (array access to ptr variable for pos)
+- FPS: 139, citizens: 29606, gameTime: 334192, end FPS: 84.336754 (array access to ptr variable + dereferenced later for pos)
+- FPS: 139, citizens: 29641, gameTime: 334448, end FPS: 85.55585 (array access to ptr variable for direction)
 
 Goal:
 - a game which should not take more than 6month to make. Maybe publish to steam.

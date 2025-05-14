@@ -99,7 +99,7 @@ pub fn setupVerticesForComplexCitizens(state: *main.ChatSimState, citizenCount: 
                     .pos = .{ chunk.citizens.posX.items[citizenIndex], chunk.citizens.posY.items[citizenIndex] },
                     .imageIndex = citizen.imageIndex,
                     .animationTimer = animationTimer,
-                    .moveSpeed = if (citizen.moveTo.items.len > 0) @floatCast(citizen.moveSpeed) else 0,
+                    .moveSpeed = if (citizen.moveTo.items.len > 0) @floatCast(chunk.citizens.moveSpeed.items[citizenIndex]) else 0,
                     .booleans = packBools(citizen, state),
                 };
                 index += 1;
