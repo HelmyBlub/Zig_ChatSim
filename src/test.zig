@@ -43,7 +43,8 @@ pub const TestData = struct {
 };
 
 pub fn executePerfromanceTest() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
+    //    var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
+    var gpa = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
     var state: main.ChatSimState = undefined;

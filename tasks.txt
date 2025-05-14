@@ -1,6 +1,11 @@
 tasks:
-- check code for performance improvement for single cpu and simd
-    - citizen move
+- performance
+    - check code for performance improvement for single cpu and simd
+        - citizen move
+            - continue: citizen movement broken
+        - data to gpu?
+    - single cpu
+        - pathfinding still searches for fastest, simplify to a "decent" path
 
 - bug: deleting can crash game
     - integer overflow, D:\mein\github_gamedev\Zig_ChatSim\src\citizen.zig:356:31: 0x7ff7f71f682c in buildingFinished (zig.exe.obj),  building.woodRequired -= 1;
@@ -11,6 +16,7 @@ tasks:
         - check code for performance improvement for single cpu and simd
         - check code for performance improvement for multiple cpu cores
         - performance of hashMap varies a lot. at some points goes below 30 fps and at other cpu is only at 17%
+        - check total performance, not only tick
     - save game progress?
     - put on steam
 
@@ -21,6 +27,10 @@ tasks:
 Some data:
 - FPS: 140, citizens: 29944, gameTime: 334736, end FPS: 92.22591
 - ~92000 citizen my cpu can not keep 60fps anymore(while streamng + debug mode)
+
+- FPS: 135, citizens: 29255, gameTime: 330176, end FPS: 81.20543 (changed citizen posX and posY into array to prepare for simd)
+- FPS: 133, citizens: 28924, gameTime: 328224, end FPS: 74.11619 (changed direction)
+- FPS: 139, citizens: 29804, gameTime: 333776, end FPS: 81.204216 (arena allocator)
 
 Goal:
 - a game which should not take more than 6month to make. Maybe publish to steam.

@@ -522,7 +522,7 @@ pub fn placeTree(tree: MapTree, state: *main.ChatSimState) !bool {
 pub fn placeCitizen(citizen: main.Citizen, position: main.Position, state: *main.ChatSimState) !void {
     const chunk = try getChunkAndCreateIfNotExistsForPosition(position, state);
     state.citizenCounter += 1;
-    try main.Citizens.appendCitizen(citizen, position.x, position.y, &chunk.citizens);
+    try main.Citizens.appendCitizen(citizen, position.x, position.y, 0, &chunk.citizens);
     try addTickPosition(chunk.chunkXY, state);
 }
 
@@ -915,7 +915,7 @@ pub fn createSpawnChunk(allocator: std.mem.Allocator, state: *main.ChatSimState)
     try spawnChunk.trees.append(.{ .position = .{ .x = GameMap.TILE_SIZE + halveTileSize, .y = GameMap.TILE_SIZE + halveTileSize }, .fullyGrown = true });
     var citizen = main.Citizen.createCitizen(allocator);
     citizen.homePosition = .{ .x = halveTileSize, .y = halveTileSize };
-    try main.Citizens.appendCitizen(citizen, 0, 0, &spawnChunk.citizens);
+    try main.Citizens.appendCitizen(citizen, 0, 0, 0, &spawnChunk.citizens);
 
     state.citizenCounterLastTick = 1;
 
