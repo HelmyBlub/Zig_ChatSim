@@ -42,48 +42,49 @@ pub const TestData = struct {
     fpsLimiter: bool = true,
 };
 
-test "test vector" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
-    var citizens: main.Citizens = undefined;
-    try main.Citizens.init(&citizens, allocator);
-    for (0..40) |_| {
-        const citizen = main.Citizen.createCitizen(allocator);
-        try main.Citizens.appendCitizen(citizen, 0, 0, &citizens);
-    }
-    const startTimeVector = std.time.nanoTimestamp();
-    const vectorSize = 8;
-    const vectorLoops = @divFloor(citizens.citizens.items.len, vectorSize);
-    for (0..20_000) |_| {
-        for (0..vectorLoops) |i| {
-            vectorTest1(i * vectorSize, vectorSize, &citizens);
-        }
-        for ((vectorLoops * vectorSize)..citizens.citizens.items.len) |i| {
-            nonVector1(i, &citizens);
-        }
-    }
-    const vectorTime = std.time.nanoTimestamp() - startTimeVector;
-    const startTime = std.time.nanoTimestamp();
-    for (0..20_000) |_| {
-        for (0..citizens.citizens.items.len) |i| {
-            nonVector1(i, &citizens);
-        }
-    }
-    const nonVectorTime = std.time.nanoTimestamp() - startTime;
-    std.debug.print("{d}\n", .{vectorTime});
-    std.debug.print("{d}\n", .{nonVectorTime});
+// test "test vector" {
+//     var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
+//     defer _ = gpa.deinit();
+//     const allocator = gpa.allocator();
+//     var citizens: main.Citizens = undefined;
+//     try main.Citizens.init(&citizens, allocator);
+//     for (0..400) |_| {
+//         const citizen = main.Citizen.createCitizen(allocator);
+//         try main.Citizens.appendCitizen(citizen, 0, 0, &citizens);
+//     }
+//     const startTimeVector = std.time.nanoTimestamp();
+//     const vectorSize = 8;
+//     const vectorLoops = @divFloor(citizens.citizens.items.len, vectorSize);
+//     for (0..20_000) |_| {
+//         for (0..vectorLoops) |i| {
+//             vectorTest1(i * vectorSize, vectorSize, &citizens);
+//         }
+//         for ((vectorLoops * vectorSize)..citizens.citizens.items.len) |i| {
+//             nonVector1(i, &citizens);
+//         }
+//     }
+//     const vectorTime = std.time.nanoTimestamp() - startTimeVector;
+//     const startTime = std.time.nanoTimestamp();
+//     for (0..20_000) |_| {
+//         for (0..citizens.citizens.items.len) |i| {
+//             nonVector1(i, &citizens);
+//         }
+//     }
+//     const nonVectorTime = std.time.nanoTimestamp() - startTime;
+//     std.debug.print("{d}\n", .{vectorTime});
+//     std.debug.print("{d}\n", .{nonVectorTime});
 
-    main.Citizens.destroy(&citizens);
-}
+//     main.Citizens.destroy(&citizens);
+// }
 
 fn vectorTest1(startIndex: usize, vectorSize: comptime_int, citizens: *main.Citizens) void {
     const moveSpeedV: @Vector(vectorSize, f16) = citizens.moveSpeed.items[startIndex..][0..vectorSize].*;
-    const directionV: @Vector(vectorSize, f32) = citizens.direction.items[startIndex..][0..vectorSize].*;
+    const directionXV: @Vector(vectorSize, f32) = citizens.directionX.items[startIndex..][0..vectorSize].*;
+    const directionYV: @Vector(vectorSize, f32) = citizens.directionY.items[startIndex..][0..vectorSize].*;
     var posXV: @Vector(vectorSize, f32) = citizens.posX.items[startIndex..][0..vectorSize].*;
     var posYV: @Vector(vectorSize, f32) = citizens.posY.items[startIndex..][0..vectorSize].*;
-    posXV += std.math.cos(directionV) * moveSpeedV;
-    posYV += std.math.sin(directionV) * moveSpeedV;
+    posXV += directionXV * moveSpeedV;
+    posYV += directionYV * moveSpeedV;
     const arr1: [vectorSize]f32 = posXV;
     const arr2: [vectorSize]f32 = posYV;
     @memcpy(citizens.posX.items[startIndex..(startIndex + vectorSize)], &arr1);
@@ -92,11 +93,8 @@ fn vectorTest1(startIndex: usize, vectorSize: comptime_int, citizens: *main.Citi
 
 fn nonVector1(index: usize, citizens: *main.Citizens) void {
     const moveSpeed = citizens.moveSpeed.items[index];
-    const directionPtr = &citizens.direction.items[index];
-    const posXPtr = &citizens.posX.items[index];
-    const posYPtr = &citizens.posY.items[index];
-    posXPtr.* += std.math.cos(directionPtr.*) * moveSpeed;
-    posYPtr.* += std.math.sin(directionPtr.*) * moveSpeed;
+    citizens.posX.items[index] += citizens.directionX.items[index] * moveSpeed;
+    citizens.posY.items[index] += citizens.directionY.items[index] * moveSpeed;
 }
 
 pub fn executePerfromanceTest() !void {

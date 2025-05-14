@@ -37,6 +37,8 @@ Some data:
 - FPS: 141, citizens: 29867, gameTime: 335888, end FPS: 87.1153 (move speed change)
 - FPS: 133, citizens: 29058, gameTime: 328224, end FPS: 82.50973 (always calculate moving even for moveSpeed 0)
 - FPS: 136, citizens: 29640, gameTime: 331232, end FPS: 86.7522 (first simd version)
+- FPS: 144, citizens: 30811, gameTime: 338688, end FPS: 92.63847 (changed direction to x and y to skip cos/sin)
+- FPS: 144, citizens: 30831, gameTime: 338816, end FPS: 96.27385 (changed vector code a bit)
 
 Goal:
 - a game which should not take more than 6month to make. Maybe publish to steam.

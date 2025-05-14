@@ -26,7 +26,8 @@ pub const Citizens = struct {
     citizens: std.ArrayList(main.Citizen),
     posX: std.ArrayList(f32),
     posY: std.ArrayList(f32),
-    direction: std.ArrayList(f32),
+    directionX: std.ArrayList(f32),
+    directionY: std.ArrayList(f32),
     moveSpeed: std.ArrayList(f16),
     moveTargetPosX: std.ArrayList(f32),
     moveTargetPosY: std.ArrayList(f32),
@@ -35,7 +36,8 @@ pub const Citizens = struct {
         citizens.citizens = std.ArrayList(Citizen).init(allocator);
         citizens.posX = std.ArrayList(f32).init(allocator);
         citizens.posY = std.ArrayList(f32).init(allocator);
-        citizens.direction = std.ArrayList(f32).init(allocator);
+        citizens.directionX = std.ArrayList(f32).init(allocator);
+        citizens.directionY = std.ArrayList(f32).init(allocator);
         citizens.moveSpeed = std.ArrayList(f16).init(allocator);
     }
 
@@ -43,7 +45,8 @@ pub const Citizens = struct {
         try chunkCitizens.citizens.ensureUnusedCapacity(size);
         try chunkCitizens.posX.ensureUnusedCapacity(size);
         try chunkCitizens.posY.ensureUnusedCapacity(size);
-        try chunkCitizens.direction.ensureUnusedCapacity(size);
+        try chunkCitizens.directionX.ensureUnusedCapacity(size);
+        try chunkCitizens.directionY.ensureUnusedCapacity(size);
         try chunkCitizens.moveSpeed.ensureUnusedCapacity(size);
     }
 
@@ -52,7 +55,8 @@ pub const Citizens = struct {
         citizens.citizens.deinit();
         citizens.posX.deinit();
         citizens.posY.deinit();
-        citizens.direction.deinit();
+        citizens.directionX.deinit();
+        citizens.directionY.deinit();
         citizens.moveSpeed.deinit();
     }
 
@@ -60,7 +64,8 @@ pub const Citizens = struct {
         try chunkCitizens.citizens.append(citizen);
         try chunkCitizens.posX.append(posX);
         try chunkCitizens.posY.append(posY);
-        try chunkCitizens.direction.append(0);
+        try chunkCitizens.directionX.append(1);
+        try chunkCitizens.directionY.append(0);
         try chunkCitizens.moveSpeed.append(Citizen.MOVE_SPEED_NORMAL);
     }
 
@@ -68,7 +73,8 @@ pub const Citizens = struct {
         _ = chunkCitizens.citizens.swapRemove(index);
         _ = chunkCitizens.posX.swapRemove(index);
         _ = chunkCitizens.posY.swapRemove(index);
-        _ = chunkCitizens.direction.swapRemove(index);
+        _ = chunkCitizens.directionX.swapRemove(index);
+        _ = chunkCitizens.directionY.swapRemove(index);
         _ = chunkCitizens.moveSpeed.swapRemove(index);
     }
 
@@ -76,7 +82,8 @@ pub const Citizens = struct {
         try chunkCitizensNew.citizens.append(chunkCitizensOld.citizens.swapRemove(index));
         try chunkCitizensNew.posX.append(chunkCitizensOld.posX.swapRemove(index));
         try chunkCitizensNew.posY.append(chunkCitizensOld.posY.swapRemove(index));
-        try chunkCitizensNew.direction.append(chunkCitizensOld.direction.swapRemove(index));
+        try chunkCitizensNew.directionX.append(chunkCitizensOld.directionX.swapRemove(index));
+        try chunkCitizensNew.directionY.append(chunkCitizensOld.directionY.swapRemove(index));
         try chunkCitizensNew.moveSpeed.append(chunkCitizensOld.moveSpeed.swapRemove(index));
     }
 };
@@ -159,7 +166,9 @@ pub const Citizen: type = struct {
         } else {
             self.moveTo.items[0] = target;
             recalculateCitizenImageIndex(self, citizenPos);
-            chunkCitizens.direction.items[citizenIndex] = main.calculateDirection(citizenPos, self.moveTo.getLast());
+            const direction = main.calculateDirection(citizenPos, self.moveTo.getLast());
+            chunkCitizens.directionX.items[citizenIndex] = @cos(direction);
+            chunkCitizens.directionY.items[citizenIndex] = @sin(direction);
             calculateMoveSpeed(self, citizenIndex, chunkCitizens);
         }
         codePerformanceZig.endMeasure("   pathfind", &state.codePerformanceData);
@@ -167,11 +176,12 @@ pub const Citizen: type = struct {
 
     fn citizenMoveVector(startIndex: usize, vectorSize: comptime_int, citizens: *Citizens) void {
         const moveSpeedV: @Vector(vectorSize, f16) = citizens.moveSpeed.items[startIndex..][0..vectorSize].*;
-        const directionV: @Vector(vectorSize, f32) = citizens.direction.items[startIndex..][0..vectorSize].*;
+        const directionXV: @Vector(vectorSize, f32) = citizens.directionX.items[startIndex..][0..vectorSize].*;
+        const directionYV: @Vector(vectorSize, f32) = citizens.directionY.items[startIndex..][0..vectorSize].*;
         var posXV: @Vector(vectorSize, f32) = citizens.posX.items[startIndex..][0..vectorSize].*;
         var posYV: @Vector(vectorSize, f32) = citizens.posY.items[startIndex..][0..vectorSize].*;
-        posXV += std.math.cos(directionV) * moveSpeedV;
-        posYV += std.math.sin(directionV) * moveSpeedV;
+        posXV += directionXV * moveSpeedV;
+        posYV += directionYV * moveSpeedV;
         const arr1: [vectorSize]f32 = posXV;
         const arr2: [vectorSize]f32 = posYV;
         @memcpy(citizens.posX.items[startIndex..(startIndex + vectorSize)], &arr1);
@@ -179,16 +189,18 @@ pub const Citizen: type = struct {
 
         for (0..vectorSize) |i| {
             const index = i + startIndex;
-            const moveSpeed = citizens.moveSpeed.items[index];
             const citizen = &citizens.citizens.items[index];
             if (citizen.moveTo.items.len > 0) {
-                const posX = citizens.posX.items[index];
-                const posY = citizens.posY.items[index];
+                const moveSpeed = moveSpeedV[i];
+                const posX = arr1[i];
+                const posY = arr2[i];
                 const moveTo = citizen.moveTo.getLast();
                 if (@abs(posX - moveTo.x) < moveSpeed and @abs(posY - moveTo.y) < moveSpeed) {
                     _ = citizen.moveTo.pop();
                     if (citizen.moveTo.items.len > 0) {
-                        citizens.direction.items[index] = main.calculateDirection(.{ .x = posX, .y = posY }, citizen.moveTo.getLast());
+                        const direction = main.calculateDirection(.{ .x = posX, .y = posY }, citizen.moveTo.getLast());
+                        citizens.directionX.items[index] = @cos(direction);
+                        citizens.directionY.items[index] = @sin(direction);
                     } else {
                         calculateMoveSpeed(citizen, index, citizens);
                     }
@@ -200,11 +212,12 @@ pub const Citizen: type = struct {
 
     fn citizenMove(citizen: *Citizen, index: usize, citizens: *Citizens) void {
         const moveSpeed = citizens.moveSpeed.items[index];
-        const directionPtr = &citizens.direction.items[index];
+        const directionXPtr = &citizens.directionX.items[index];
+        const directionYPtr = &citizens.directionY.items[index];
         const posXPtr = &citizens.posX.items[index];
         const posYPtr = &citizens.posY.items[index];
-        posXPtr.* += std.math.cos(directionPtr.*) * moveSpeed;
-        posYPtr.* += std.math.sin(directionPtr.*) * moveSpeed;
+        posXPtr.* += directionXPtr.* * moveSpeed;
+        posYPtr.* += directionYPtr.* * moveSpeed;
         if (citizen.moveTo.items.len > 0) {
             const posX = posXPtr.*;
             const posY = posYPtr.*;
@@ -212,7 +225,9 @@ pub const Citizen: type = struct {
             if (@abs(posX - moveTo.x) < moveSpeed and @abs(posY - moveTo.y) < moveSpeed) {
                 _ = citizen.moveTo.pop();
                 if (citizen.moveTo.items.len > 0) {
-                    directionPtr.* = main.calculateDirection(.{ .x = posX, .y = posY }, citizen.moveTo.getLast());
+                    const direction = main.calculateDirection(.{ .x = posX, .y = posY }, citizen.moveTo.getLast());
+                    directionXPtr.* = @cos(direction);
+                    directionYPtr.* = @sin(direction);
                 } else {
                     calculateMoveSpeed(citizen, index, citizens);
                 }

@@ -80,10 +80,10 @@ test "test for memory leaks" {
     // testing allocator will fail test if something is not deallocated
 }
 
-// test "test measure performance" {
-//     SIMULATION_MICRO_SECOND_DURATION = 30_000_000;
-//     try testZig.executePerfromanceTest();
-// }
+test "test measure performance" {
+    SIMULATION_MICRO_SECOND_DURATION = 30_000_000;
+    try testZig.executePerfromanceTest();
+}
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
