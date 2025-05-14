@@ -132,9 +132,14 @@ pub const Citizen: type = struct {
 
     pub fn citizensMoveTick(chunk: *mapZig.MapChunk, state: *main.ChatSimState) !void {
         try codePerformanceZig.startMeasure("   move", &state.codePerformanceData);
-        for (0..chunk.citizens.citizens.items.len) |i| {
+        const vectorSize = 8;
+        const vectorLoops = @divFloor(chunk.citizens.citizens.items.len, vectorSize);
+        for (0..vectorLoops) |i| {
+            citizenMoveVector(i * vectorSize, vectorSize, &chunk.citizens);
+        }
+        for ((vectorLoops * vectorSize)..chunk.citizens.citizens.items.len) |i| {
             const citizen: *Citizen = &chunk.citizens.citizens.items[i];
-            citizenMove(citizen, i, chunk.citizens);
+            citizenMove(citizen, i, &chunk.citizens);
         }
         codePerformanceZig.endMeasure("   move", &state.codePerformanceData);
     }
@@ -155,25 +160,62 @@ pub const Citizen: type = struct {
             self.moveTo.items[0] = target;
             recalculateCitizenImageIndex(self, citizenPos);
             chunkCitizens.direction.items[citizenIndex] = main.calculateDirection(citizenPos, self.moveTo.getLast());
+            calculateMoveSpeed(self, citizenIndex, chunkCitizens);
         }
         codePerformanceZig.endMeasure("   pathfind", &state.codePerformanceData);
     }
 
-    pub fn citizenMove(citizen: *Citizen, index: usize, citizens: Citizens) void {
+    fn citizenMoveVector(startIndex: usize, vectorSize: comptime_int, citizens: *Citizens) void {
+        const moveSpeedV: @Vector(vectorSize, f16) = citizens.moveSpeed.items[startIndex..][0..vectorSize].*;
+        const directionV: @Vector(vectorSize, f32) = citizens.direction.items[startIndex..][0..vectorSize].*;
+        var posXV: @Vector(vectorSize, f32) = citizens.posX.items[startIndex..][0..vectorSize].*;
+        var posYV: @Vector(vectorSize, f32) = citizens.posY.items[startIndex..][0..vectorSize].*;
+        posXV += std.math.cos(directionV) * moveSpeedV;
+        posYV += std.math.sin(directionV) * moveSpeedV;
+        const arr1: [vectorSize]f32 = posXV;
+        const arr2: [vectorSize]f32 = posYV;
+        @memcpy(citizens.posX.items[startIndex..(startIndex + vectorSize)], &arr1);
+        @memcpy(citizens.posY.items[startIndex..(startIndex + vectorSize)], &arr2);
+
+        for (0..vectorSize) |i| {
+            const index = i + startIndex;
+            const moveSpeed = citizens.moveSpeed.items[index];
+            const citizen = &citizens.citizens.items[index];
+            if (citizen.moveTo.items.len > 0) {
+                const posX = citizens.posX.items[index];
+                const posY = citizens.posY.items[index];
+                const moveTo = citizen.moveTo.getLast();
+                if (@abs(posX - moveTo.x) < moveSpeed and @abs(posY - moveTo.y) < moveSpeed) {
+                    _ = citizen.moveTo.pop();
+                    if (citizen.moveTo.items.len > 0) {
+                        citizens.direction.items[index] = main.calculateDirection(.{ .x = posX, .y = posY }, citizen.moveTo.getLast());
+                    } else {
+                        calculateMoveSpeed(citizen, index, citizens);
+                    }
+                    recalculateCitizenImageIndex(citizen, .{ .x = posX, .y = posY });
+                }
+            }
+        }
+    }
+
+    fn citizenMove(citizen: *Citizen, index: usize, citizens: *Citizens) void {
+        const moveSpeed = citizens.moveSpeed.items[index];
+        const directionPtr = &citizens.direction.items[index];
+        const posXPtr = &citizens.posX.items[index];
+        const posYPtr = &citizens.posY.items[index];
+        posXPtr.* += std.math.cos(directionPtr.*) * moveSpeed;
+        posYPtr.* += std.math.sin(directionPtr.*) * moveSpeed;
         if (citizen.moveTo.items.len > 0) {
-            const moveTo = citizen.moveTo.getLast();
-            var moveSpeed = citizens.moveSpeed.items[index];
-            const directionPtr = &citizens.direction.items[index];
-            const posXPtr = &citizens.posX.items[index];
-            const posYPtr = &citizens.posY.items[index];
-            if (citizen.hasWood) moveSpeed *= MOVE_SPEED_WODD_FACTOR;
-            posXPtr.* += std.math.cos(directionPtr.*) * moveSpeed;
-            posYPtr.* += std.math.sin(directionPtr.*) * moveSpeed;
             const posX = posXPtr.*;
             const posY = posYPtr.*;
+            const moveTo = citizen.moveTo.getLast();
             if (@abs(posX - moveTo.x) < moveSpeed and @abs(posY - moveTo.y) < moveSpeed) {
                 _ = citizen.moveTo.pop();
-                if (citizen.moveTo.items.len > 0) directionPtr.* = main.calculateDirection(.{ .x = posX, .y = posY }, citizen.moveTo.getLast());
+                if (citizen.moveTo.items.len > 0) {
+                    directionPtr.* = main.calculateDirection(.{ .x = posX, .y = posY }, citizen.moveTo.getLast());
+                } else {
+                    calculateMoveSpeed(citizen, index, citizens);
+                }
                 recalculateCitizenImageIndex(citizen, .{ .x = posX, .y = posY });
             }
         }
@@ -215,6 +257,16 @@ pub const Citizen: type = struct {
     }
 };
 
+fn calculateMoveSpeed(citizen: *Citizen, citizenIndex: usize, chunkCitizens: *Citizens) void {
+    if (citizen.moveTo.items.len > 0) {
+        var moveSpeed: f16 = if (citizen.foodLevel > 0) Citizen.MOVE_SPEED_NORMAL else Citizen.MOVE_SPEED_STARVING;
+        if (citizen.hasWood) moveSpeed *= Citizen.MOVE_SPEED_WODD_FACTOR;
+        chunkCitizens.moveSpeed.items[citizenIndex] = moveSpeed;
+    } else {
+        chunkCitizens.moveSpeed.items[citizenIndex] = 0;
+    }
+}
+
 fn thinkTick(citizen: *Citizen, citizenPos: main.Position, citizenIndex: usize, chunkCitizens: *Citizens, state: *main.ChatSimState) !void {
     if (citizen.nextThinkingTickTimeMs > state.gameTimeMs) return;
     if (citizen.moveTo.items.len > 0) return;
@@ -227,7 +279,7 @@ fn thinkTick(citizen: *Citizen, citizenPos: main.Position, citizenIndex: usize, 
             try potatoEatTick(citizen, citizenPos, state);
         },
         .potatoEatFinished => {
-            try potatoEatFinishedTick(citizen, citizenPos, citizenIndex, chunkCitizens, state);
+            try potatoEatFinishedTick(citizen, citizenPos, state);
         },
         .potatoPlant => {
             try potatoPlant(citizen, citizenPos, citizenIndex, chunkCitizens, state);
@@ -489,13 +541,10 @@ fn potatoHarvestTick(citizen: *Citizen, citizenPos: main.Position, citizenIndex:
     }
 }
 
-fn potatoEatFinishedTick(citizen: *Citizen, citizenPos: main.Position, citizenIndex: usize, chunkCitizens: *Citizens, state: *main.ChatSimState) !void {
+fn potatoEatFinishedTick(citizen: *Citizen, citizenPos: main.Position, state: *main.ChatSimState) !void {
     citizen.hasPotato = false;
     citizen.potatoPosition = null;
     eatFood(0.5, citizen, state);
-    if (citizen.foodLevel > 0 and chunkCitizens.moveSpeed.items[citizenIndex] == Citizen.MOVE_SPEED_STARVING) {
-        chunkCitizens.moveSpeed.items[citizenIndex] = Citizen.MOVE_SPEED_NORMAL;
-    }
     try nextThinkingAction(citizen, citizenPos, state);
 }
 
@@ -579,9 +628,7 @@ fn foodTick(citizen: *Citizen, citizenPos: main.Position, citizenIndex: usize, c
         citizen.nextFoodTickTimeMs = state.gameTimeMs + timeUntilStarving;
     } else {
         citizen.nextFoodTickTimeMs = state.gameTimeMs + 15_000;
-        if (chunkCitizens.moveSpeed.items[citizenIndex] == Citizen.MOVE_SPEED_NORMAL and citizen.foodLevel <= 0) {
-            chunkCitizens.moveSpeed.items[citizenIndex] = Citizen.MOVE_SPEED_STARVING;
-        }
+        calculateMoveSpeed(citizen, citizenIndex, chunkCitizens);
     }
 }
 
