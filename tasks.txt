@@ -1,15 +1,16 @@
 tasks:
 - check code for performance improvement for single cpu
     - paint stuff
-        - tree
+        - citizens
+        - building
+        - big building
+
+        - potato
+
         - sprite data setup changes
             - simplfy and use memcpy on far zooms
             - for near zoom values i have to keep default
             - try the not counting before and use last frame values
-        - citizens
-        - potato
-        - building
-        - big building
 
 - bug: deleting can crash game
     - integer overflow, D:\mein\github_gamedev\Zig_ChatSim\src\citizen.zig:356:31: 0x7ff7f71f682c in buildingFinished (zig.exe.obj),  building.woodRequired -= 1;
@@ -32,7 +33,8 @@ Some data:
 - FPS: 146, citizens: 33786, gameTime: 340960, end FPS: 92.33889
 - ~102_000 citizen my cpu can not keep 60fps anymore(while streamng + debug mode)
 - FPS: 147, citizens: 33903, gameTime: 341456, end FPS: 91.86446 (tree code data change for memcpy)
-
+- FPS: 142, citizens: 32698, gameTime: 336448, end FPS: 87.73847 (citizen + building code data change for memcpy, but not using memcpy yet)
+ 
 - fps test case: normal test, on 25k citizens -> set speed to 1, show fps, zoom out max
   FPS: 155, citizens: 30901, gameTime: 329648, end FPS: 103.1204
   FPS: 156, citizens: 31011, gameTime: 330096, end FPS: 112.827225 (with path changed)

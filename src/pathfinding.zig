@@ -857,9 +857,10 @@ fn reconstructPath(
 pub fn pathfindAStar(
     goalTile: mapZig.TileXY,
     citizen: *main.Citizen,
+    citizenPos: main.Position,
     state: *main.ChatSimState,
 ) !bool {
-    const startTile = mapZig.mapPositionToTileXy(citizen.position);
+    const startTile = mapZig.mapPositionToTileXy(citizenPos);
     if (startTile.tileX == goalTile.tileX and startTile.tileY == goalTile.tileY) {
         try citizen.moveTo.append(mapZig.mapTileXyToTilePosition(goalTile));
         return true;
@@ -927,7 +928,7 @@ pub fn pathfindAStar(
             }
             const neighborGraph = &state.pathfindingData.graphRectangles.items[conIndex];
             const neighborMiddle = mapZig.getTileRectangleMiddlePosition(neighborGraph.tileRectangle);
-            const citizenDistancePos = if (citizen.homePosition) |homePosition| homePosition else citizen.position;
+            const citizenDistancePos = if (citizen.homePosition) |homePosition| homePosition else citizenPos;
             if (@abs(neighborMiddle.x - citizenDistancePos.x) < maxSearchDistance and @abs(neighborMiddle.y - citizenDistancePos.y) < maxSearchDistance) {
                 try neighbors.append(neighborGraph);
             }
@@ -964,10 +965,10 @@ pub fn pathfindAStar(
     return false;
 }
 
-pub fn getRandomClosePathingPosition(citizen: *main.Citizen, state: *main.ChatSimState) !?main.Position {
-    const chunk = try mapZig.getChunkAndCreateIfNotExistsForPosition(citizen.position, state);
+pub fn getRandomClosePathingPosition(citizen: *main.Citizen, citizenPos: main.Position, state: *main.ChatSimState) !?main.Position {
+    const chunk = try mapZig.getChunkAndCreateIfNotExistsForPosition(citizenPos, state);
     var result: ?main.Position = null;
-    const citizenPosTileXy = mapZig.mapPositionToTileXy(citizen.position);
+    const citizenPosTileXy = mapZig.mapPositionToTileXy(citizenPos);
     if (chunk.pathingData.pathingData[getPathingIndexForTileXY(citizenPosTileXy)]) |graphIndex| {
         var currentRectangle = &state.pathfindingData.graphRectangles.items[graphIndex];
         const rand = &state.random;
@@ -979,7 +980,7 @@ pub fn getRandomClosePathingPosition(citizen: *main.Citizen, state: *main.ChatSi
         const randomReachableGraphTopLeftPos = mapZig.mapTileXyToTileMiddlePosition(currentRectangle.tileRectangle.topLeftTileXY);
         const homePos: main.Position = if (citizen.homePosition) |homePosition| homePosition else .{ .x = 0, .y = 0 };
         const distanceHomeRandomPosition = main.calculateDistance(randomReachableGraphTopLeftPos, homePos);
-        if (distanceHomeRandomPosition < main.Citizen.MAX_SQUARE_TILE_SEARCH_DISTANCE * mapZig.GameMap.TILE_SIZE * 0.5 or main.calculateDistance(homePos, citizen.position) > distanceHomeRandomPosition) {
+        if (distanceHomeRandomPosition < main.Citizen.MAX_SQUARE_TILE_SEARCH_DISTANCE * mapZig.GameMap.TILE_SIZE * 0.5 or main.calculateDistance(homePos, citizenPos) > distanceHomeRandomPosition) {
             const finalRandomPosition = main.Position{
                 .x = randomReachableGraphTopLeftPos.x + @as(f32, @floatFromInt((currentRectangle.tileRectangle.columnCount - 1) * mapZig.GameMap.TILE_SIZE)) * rand.random().float(f32),
                 .y = randomReachableGraphTopLeftPos.y + @as(f32, @floatFromInt((currentRectangle.tileRectangle.rowCount - 1) * mapZig.GameMap.TILE_SIZE)) * rand.random().float(f32),

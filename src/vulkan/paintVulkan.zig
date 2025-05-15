@@ -287,12 +287,14 @@ fn setupVerticesForSprites(state: *main.ChatSimState) !void {
                 state,
             );
             if (!doComplexCitizen) {
-                for (chunk.citizens.items) |*citizen| {
-                    vkState.vertices[indexLayer1Citizen] = .{ .pos = .{ citizen.position.x, citizen.position.y }, .imageIndex = citizen.imageIndex, .size = mapZig.GameMap.TILE_SIZE, .rotate = 0, .cutY = 0 };
+                for (chunk.citizens.items, 0..) |*citizen, citizenIndex| {
+                    const citizenPos = chunk.citizensPos.items[citizenIndex];
+                    vkState.vertices[indexLayer1Citizen] = .{ .pos = .{ citizenPos.x, citizenPos.y }, .imageIndex = citizen.imageIndex, .size = mapZig.GameMap.TILE_SIZE, .rotate = 0, .cutY = 0 };
                     indexLayer1Citizen += 1;
                 }
             }
-            for (chunk.buildings.items) |*building| {
+            for (chunk.buildings.items, 0..) |*building, buildingIndex| {
+                const buildingPos = chunk.buildingsPos.items[buildingIndex];
                 var imageIndex: u8 = imageZig.IMAGE_WHITE_RECTANGLE;
                 var cutY: f32 = 0;
                 if (!building.inConstruction) {
@@ -301,10 +303,11 @@ fn setupVerticesForSprites(state: *main.ChatSimState) !void {
                     imageIndex = imageZig.IMAGE_HOUSE;
                     cutY = @max(1 - @as(f32, @floatFromInt(state.gameTimeMs - time)) / 3000.0, 0);
                 }
-                vkState.vertices[indexLayer1] = .{ .pos = .{ building.position.x, building.position.y }, .imageIndex = imageIndex, .size = mapZig.GameMap.TILE_SIZE, .rotate = 0, .cutY = cutY };
+                vkState.vertices[indexLayer1] = .{ .pos = .{ buildingPos.x, buildingPos.y }, .imageIndex = imageIndex, .size = mapZig.GameMap.TILE_SIZE, .rotate = 0, .cutY = cutY };
                 indexLayer1 += 1;
             }
-            for (chunk.bigBuildings.items) |*building| {
+            for (chunk.bigBuildings.items, 0..) |*building, buildingIndex| {
+                const buildingPos = chunk.bigBuildingsPos.items[buildingIndex];
                 var imageIndex: u8 = imageZig.IMAGE_BIG_HOUSE;
                 var cutY: f32 = 0;
                 if (building.inConstruction) {
@@ -314,7 +317,7 @@ fn setupVerticesForSprites(state: *main.ChatSimState) !void {
                         cutY = @as(f32, @floatFromInt(building.woodRequired)) / 16.0 * 0.8 + 0.2;
                     }
                 }
-                vkState.vertices[indexLayer1] = .{ .pos = .{ building.position.x, building.position.y }, .imageIndex = imageIndex, .size = mapZig.GameMap.TILE_SIZE * 2, .rotate = 0, .cutY = cutY };
+                vkState.vertices[indexLayer1] = .{ .pos = .{ buildingPos.x, buildingPos.y }, .imageIndex = imageIndex, .size = mapZig.GameMap.TILE_SIZE * 2, .rotate = 0, .cutY = cutY };
                 indexLayer1 += 1;
             }
             for (chunk.potatoFields.items) |*field| {

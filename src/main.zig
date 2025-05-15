@@ -408,12 +408,15 @@ pub fn destroyGameState(state: *ChatSimState) void {
     var iterator = state.map.chunks.valueIterator();
     while (iterator.next()) |chunk| {
         chunk.buildings.deinit();
+        chunk.buildingsPos.deinit();
         chunk.bigBuildings.deinit();
+        chunk.bigBuildingsPos.deinit();
         chunk.trees.deinit();
         chunk.treesPos.deinit();
         chunk.potatoFields.deinit();
         Citizen.destroyCitizens(chunk);
         chunk.citizens.deinit();
+        chunk.citizensPos.deinit();
         chunk.buildOrders.deinit();
         chunk.pathes.deinit();
         chunk.queue.deinit();

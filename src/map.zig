@@ -36,10 +36,13 @@ pub const MapChunk = struct {
     trees: std.ArrayList(MapTree),
     treesPos: std.ArrayList(main.Position),
     buildings: std.ArrayList(Building),
+    buildingsPos: std.ArrayList(main.Position),
     /// buildings bigger than one tile
     bigBuildings: std.ArrayList(Building),
+    bigBuildingsPos: std.ArrayList(main.Position),
     potatoFields: std.ArrayList(PotatoField),
     citizens: std.ArrayList(main.Citizen),
+    citizensPos: std.ArrayList(main.Position),
     buildOrders: std.ArrayList(BuildOrder),
     skipBuildOrdersUntilTimeMs: ?u32 = null,
     pathes: std.ArrayList(main.Position),
@@ -68,8 +71,8 @@ pub const BuildOrder = struct {
 };
 
 pub const MapObject = union(enum) {
-    building: *Building,
-    bigBuilding: *Building,
+    building: struct { building: *Building, position: main.Position },
+    bigBuilding: struct { bigBuilding: *Building, position: main.Position },
     potatoField: *PotatoField,
     tree: struct { tree: *MapTree, position: main.Position },
     path: *main.Position,
@@ -85,7 +88,6 @@ pub const MapTree = struct {
 
 pub const Building = struct {
     type: u8,
-    position: main.Position,
     inConstruction: bool = true,
     woodRequired: u8 = 1,
     citizensSpawned: u8 = 0,
@@ -207,12 +209,14 @@ pub fn demolishAnythingOnPosition(position: main.Position, optEntireDemolishRect
         }
     }
     for (chunk.buildings.items, 0..) |*building, i| {
-        if (main.calculateDistance(position, building.position) < GameMap.TILE_SIZE) {
+        const buildingPos = chunk.buildingsPos.items[i];
+        if (main.calculateDistance(position, buildingPos) < GameMap.TILE_SIZE) {
             if (state.citizenCounter > 1 and building.citizensSpawned > 0) {
                 for (chunk.citizens.items, 0..) |citizen, j| {
-                    if (citizen.homePosition != null and citizen.homePosition.?.x == building.position.x and citizen.homePosition.?.y == building.position.y) {
+                    if (citizen.homePosition != null and citizen.homePosition.?.x == buildingPos.x and citizen.homePosition.?.y == buildingPos.y) {
                         citizen.moveTo.deinit();
                         _ = chunk.citizens.swapRemove(j);
+                        _ = chunk.citizensPos.swapRemove(j);
                         building.citizensSpawned -= 1;
                         state.citizenCounter -= 1;
                         break;
@@ -222,14 +226,16 @@ pub fn demolishAnythingOnPosition(position: main.Position, optEntireDemolishRect
 
             if (building.citizensSpawned == 0) {
                 _ = chunk.buildings.swapRemove(i);
+                _ = chunk.buildingsPos.swapRemove(i);
             }
             return;
         }
     }
     if (optEntireDemolishRectangle) |entireDemolishRectangle| {
         for (chunk.bigBuildings.items, 0..) |*building, i| {
-            if (main.calculateDistance(position, building.position) < GameMap.TILE_SIZE) {
-                const tileXYOfBuilding = mapPositionToTileXy(building.position);
+            const bigBuildingPos = chunk.bigBuildingsPos.items[i];
+            if (main.calculateDistance(position, bigBuildingPos) < GameMap.TILE_SIZE) {
+                const tileXYOfBuilding = mapPositionToTileXy(bigBuildingPos);
                 const buildingTileRectangle: MapTileRectangle = .{
                     .topLeftTileXY = .{ .tileX = tileXYOfBuilding.tileX - 1, .tileY = tileXYOfBuilding.tileY - 1 },
                     .columnCount = 2,
@@ -247,9 +253,10 @@ pub fn demolishAnythingOnPosition(position: main.Position, optEntireDemolishRect
                     }
                     index -= 1;
                     const citizen = chunk.citizens.items[index];
-                    if (citizen.homePosition != null and citizen.homePosition.?.x == building.position.x and citizen.homePosition.?.y == building.position.y) {
+                    if (citizen.homePosition != null and citizen.homePosition.?.x == bigBuildingPos.x and citizen.homePosition.?.y == bigBuildingPos.y) {
                         citizen.moveTo.deinit();
                         _ = chunk.citizens.swapRemove(index);
+                        _ = chunk.citizensPos.swapRemove(index);
                         state.citizenCounter -= 1;
                         building.citizensSpawned -= 1;
                     }
@@ -257,6 +264,7 @@ pub fn demolishAnythingOnPosition(position: main.Position, optEntireDemolishRect
 
                 if (building.citizensSpawned == 0) {
                     _ = chunk.bigBuildings.swapRemove(i);
+                    _ = chunk.bigBuildingsPos.swapRemove(i);
                 }
                 return;
             }
@@ -285,14 +293,16 @@ pub fn getTileRectangleMiddlePosition(tileRectangle: MapTileRectangle) main.Posi
 
 pub fn getObjectOnPosition(position: main.Position, state: *main.ChatSimState) !?MapObject {
     const chunk = try getChunkAndCreateIfNotExistsForPosition(position, state);
-    for (chunk.buildings.items) |*building| {
-        if (main.calculateDistance(position, building.position) < GameMap.TILE_SIZE) {
-            return .{ .building = building };
+    for (chunk.buildings.items, 0..) |*building, index| {
+        const buildingPos = chunk.buildingsPos.items[index];
+        if (main.calculateDistance(position, buildingPos) < GameMap.TILE_SIZE) {
+            return .{ .building = .{ .building = building, .position = buildingPos } };
         }
     }
-    for (chunk.bigBuildings.items) |*building| {
-        if (main.calculateDistance(position, building.position) < GameMap.TILE_SIZE) {
-            return .{ .bigBuilding = building };
+    for (chunk.bigBuildings.items, 0..) |*building, index| {
+        const bigBuildingPos = chunk.bigBuildingsPos.items[index];
+        if (main.calculateDistance(position, bigBuildingPos) < GameMap.TILE_SIZE) {
+            return .{ .bigBuilding = .{ .bigBuilding = building, .position = bigBuildingPos } };
         }
     }
 
@@ -368,14 +378,14 @@ pub fn isRectangleBuildable(buildRectangle: MapTileRectangle, state: *main.ChatS
     for (0..chunksMaxIndex) |chunkIndex| {
         const chunk = try getChunkAndCreateIfNotExistsForChunkXY(chunkXysToCheck[chunkIndex].?, state);
         if (!ignore1TileBuildings) {
-            for (chunk.buildings.items) |building| {
-                if (is1x1ObjectOverlapping(building.position, buildRectangle)) {
+            for (chunk.buildingsPos.items) |buildingPos| {
+                if (is1x1ObjectOverlapping(buildingPos, buildRectangle)) {
                     return false;
                 }
             }
         }
-        for (chunk.bigBuildings.items) |building| {
-            if (isRectangleOverlapping(getBigBuildingRectangle(building.position), buildRectangle)) {
+        for (chunk.bigBuildingsPos.items) |buildingPos| {
+            if (isRectangleOverlapping(getBigBuildingRectangle(buildingPos), buildRectangle)) {
                 return false;
             }
         }
@@ -521,10 +531,11 @@ pub fn placeTree(tree: MapTree, treePos: main.Position, state: *main.ChatSimStat
     return true;
 }
 
-pub fn placeCitizen(citizen: main.Citizen, state: *main.ChatSimState) !void {
-    const chunk = try getChunkAndCreateIfNotExistsForPosition(citizen.position, state);
+pub fn placeCitizen(citizen: main.Citizen, citizenPos: main.Position, state: *main.ChatSimState) !void {
+    const chunk = try getChunkAndCreateIfNotExistsForPosition(citizenPos, state);
     state.citizenCounter += 1;
     try chunk.citizens.append(citizen);
+    try chunk.citizensPos.append(citizenPos);
     try addTickPosition(chunk.chunkXY, state);
 }
 
@@ -546,41 +557,41 @@ pub fn placePath(pathPos: main.Position, state: *main.ChatSimState) !bool {
 
 pub fn placeHouse(position: main.Position, state: *main.ChatSimState, checkPath: bool, displayHelpText: bool) !bool {
     const newBuilding: Building = .{
-        .position = position,
         .type = BUILD_TYPE_HOUSE,
     };
-    return try placeBuilding(newBuilding, state, checkPath, displayHelpText);
+    return try placeBuilding(newBuilding, position, state, checkPath, displayHelpText);
 }
 
 pub fn placeBigHouse(position: main.Position, state: *main.ChatSimState, checkPath: bool, displayHelpText: bool) !bool {
     const newBuilding: Building = .{
-        .position = position,
         .type = BUILD_TYPE_BIG_HOUSE,
         .woodRequired = 16,
     };
-    return try placeBuilding(newBuilding, state, checkPath, displayHelpText);
+    return try placeBuilding(newBuilding, position, state, checkPath, displayHelpText);
 }
 
-pub fn placeBuilding(building: Building, state: *main.ChatSimState, checkPath: bool, displayHelpText: bool) !bool {
-    const chunk = try getChunkAndCreateIfNotExistsForPosition(building.position, state);
+pub fn placeBuilding(building: Building, buildingPos: main.Position, state: *main.ChatSimState, checkPath: bool, displayHelpText: bool) !bool {
+    const chunk = try getChunkAndCreateIfNotExistsForPosition(buildingPos, state);
     if (building.type == BUILDING_TYPE_BIG_HOUSE) {
-        const buildRectangle = getBigBuildingRectangle(building.position);
+        const buildRectangle = getBigBuildingRectangle(buildingPos);
         if (!try isRectangleBuildable(buildRectangle, state, false, true, true)) return false;
         if (checkPath and !try isRectangleAdjacentToPath(buildRectangle, state)) return false;
         var tempBuilding = building;
-        try replace1TileBuildingsFor2x2Building(&tempBuilding, state);
+        try replace1TileBuildingsFor2x2Building(&tempBuilding, buildingPos, state);
         try main.pathfindingZig.changePathingDataRectangle(buildRectangle, PathingType.slow, state);
         try chunk.bigBuildings.append(tempBuilding);
-        try chunk.buildOrders.append(.{ .position = tempBuilding.position, .materialCount = tempBuilding.woodRequired });
+        try chunk.bigBuildingsPos.append(buildingPos);
+        try chunk.buildOrders.append(.{ .position = buildingPos, .materialCount = tempBuilding.woodRequired });
     } else {
-        const buildRectangle = get1x1RectangleFromPosition(building.position);
+        const buildRectangle = get1x1RectangleFromPosition(buildingPos);
         if (!try isRectangleBuildable(buildRectangle, state, false, false, true)) return false;
         if (checkPath and !try isRectangleAdjacentToPath(buildRectangle, state)) {
             if (displayHelpText) state.vkState.citizenPopulationCounterUx.houseBuildPathMessageDisplayTime = std.time.milliTimestamp();
             return false;
         }
         try chunk.buildings.append(building);
-        try chunk.buildOrders.append(.{ .position = building.position, .materialCount = 1 });
+        try chunk.buildingsPos.append(buildingPos);
+        try chunk.buildOrders.append(.{ .position = buildingPos, .materialCount = 1 });
     }
     try addTickPosition(chunk.chunkXY, state);
     return true;
@@ -663,33 +674,39 @@ fn isRectangleAdjacentToPath(buildRectangle: MapTileRectangle, state: *main.Chat
     return false;
 }
 
-fn replace1TileBuildingsFor2x2Building(building: *Building, state: *main.ChatSimState) !void {
+fn replace1TileBuildingsFor2x2Building(building: *Building, buildingPos: main.Position, state: *main.ChatSimState) !void {
     const corners = [_]main.Position{
-        .{ .x = building.position.x - GameMap.TILE_SIZE / 2, .y = building.position.y - GameMap.TILE_SIZE / 2 },
-        .{ .x = building.position.x - GameMap.TILE_SIZE / 2, .y = building.position.y + GameMap.TILE_SIZE / 2 },
-        .{ .x = building.position.x + GameMap.TILE_SIZE / 2, .y = building.position.y - GameMap.TILE_SIZE / 2 },
-        .{ .x = building.position.x + GameMap.TILE_SIZE / 2, .y = building.position.y + GameMap.TILE_SIZE / 2 },
+        .{ .x = buildingPos.x - GameMap.TILE_SIZE / 2, .y = buildingPos.y - GameMap.TILE_SIZE / 2 },
+        .{ .x = buildingPos.x - GameMap.TILE_SIZE / 2, .y = buildingPos.y + GameMap.TILE_SIZE / 2 },
+        .{ .x = buildingPos.x + GameMap.TILE_SIZE / 2, .y = buildingPos.y - GameMap.TILE_SIZE / 2 },
+        .{ .x = buildingPos.x + GameMap.TILE_SIZE / 2, .y = buildingPos.y + GameMap.TILE_SIZE / 2 },
     };
 
     for (corners) |corner| {
         const optBuilding = try getBuildingOnPosition(.{ .x = corner.x, .y = corner.y }, state);
         if (optBuilding) |cornerBuilding| {
             if (building.woodRequired > 1) building.woodRequired -= 1;
-            const chunk = try getChunkAndCreateIfNotExistsForPosition(cornerBuilding.position, state);
+            const chunk = try getChunkAndCreateIfNotExistsForPosition(cornerBuilding.pos, state);
             for (chunk.citizens.items, 0..) |*citizen, i| {
-                if (citizen.homePosition != null and citizen.homePosition.?.x == cornerBuilding.position.x and citizen.homePosition.?.y == cornerBuilding.position.y) {
-                    citizen.homePosition = building.position;
+                if (citizen.homePosition != null and citizen.homePosition.?.x == cornerBuilding.pos.x and citizen.homePosition.?.y == cornerBuilding.pos.y) {
+                    citizen.homePosition = buildingPos;
                     building.citizensSpawned += 1;
-                    cornerBuilding.citizensSpawned -= 1;
-                    const newBuildingChunk = try getChunkAndCreateIfNotExistsForPosition(building.position, state);
+                    if (cornerBuilding.isBigBuilding) {
+                        cornerBuilding.chunk.bigBuildings.items[cornerBuilding.buildingIndex].citizensSpawned -= 1;
+                    } else {
+                        cornerBuilding.chunk.buildings.items[cornerBuilding.buildingIndex].citizensSpawned -= 1;
+                    }
+                    const newBuildingChunk = try getChunkAndCreateIfNotExistsForPosition(buildingPos, state);
                     if (newBuildingChunk != chunk) {
                         const moveCitizen = chunk.citizens.swapRemove(i);
+                        const moveCitizenPos = chunk.citizensPos.swapRemove(i);
                         try newBuildingChunk.citizens.append(moveCitizen);
+                        try newBuildingChunk.citizensPos.append(moveCitizenPos);
                     }
                     break;
                 }
             }
-            try demolishAnythingOnPosition(cornerBuilding.position, null, state);
+            try demolishAnythingOnPosition(cornerBuilding.pos, null, state);
         }
     }
 }
@@ -763,16 +780,16 @@ pub fn removePotatoField(potatoIndex: usize, chunk: *MapChunk) void {
     }
 }
 
-pub fn getBuildingOnPosition(position: main.Position, state: *main.ChatSimState) !?*Building {
+pub fn getBuildingOnPosition(position: main.Position, state: *main.ChatSimState) !?struct { chunk: *MapChunk, buildingIndex: usize, isBigBuilding: bool, pos: main.Position } {
     const chunk = try getChunkAndCreateIfNotExistsForPosition(position, state);
-    for (chunk.buildings.items) |*building| {
-        if (main.calculateDistance(position, building.position) < GameMap.TILE_SIZE) {
-            return building;
+    for (chunk.buildingsPos.items, 0..) |buildingPos, index| {
+        if (main.calculateDistance(position, buildingPos) < GameMap.TILE_SIZE) {
+            return .{ .chunk = chunk, .buildingIndex = index, .isBigBuilding = false, .pos = buildingPos };
         }
     }
-    for (chunk.bigBuildings.items) |*building| {
-        if (main.calculateDistance(position, building.position) < GameMap.TILE_SIZE) {
-            return building;
+    for (chunk.bigBuildingsPos.items, 0..) |buildingPos, index| {
+        if (main.calculateDistance(position, buildingPos) < GameMap.TILE_SIZE) {
+            return .{ .chunk = chunk, .buildingIndex = index, .isBigBuilding = true, .pos = buildingPos };
         }
     }
     return null;
@@ -792,17 +809,17 @@ pub fn copyFromTo(fromTopLeftTileXY: TileXY, toTopLeftTileXY: TileXY, tileCountC
                 .x = targetTopLeftTileMiddle.x + @as(f32, @floatFromInt(x * GameMap.TILE_SIZE)),
                 .y = targetTopLeftTileMiddle.y + @as(f32, @floatFromInt(y * GameMap.TILE_SIZE)),
             };
-            for (chunk.buildings.items) |building| {
-                if (main.calculateDistance(sourcePosition, building.position) < GameMap.TILE_SIZE) {
+            for (chunk.buildingsPos.items) |buildingPos| {
+                if (main.calculateDistance(sourcePosition, buildingPos) < GameMap.TILE_SIZE) {
                     _ = try placeHouse(targetPosition, state, false, false);
                     continue :nextTile;
                 }
             }
-            for (chunk.bigBuildings.items) |building| {
-                if (main.calculateDistance(sourcePosition, building.position) < GameMap.TILE_SIZE) {
+            for (chunk.bigBuildingsPos.items) |buildingPos| {
+                if (main.calculateDistance(sourcePosition, buildingPos) < GameMap.TILE_SIZE) {
                     const position: main.Position = .{
-                        .x = building.position.x + targetTopLeftTileMiddle.x - fromTopLeftTileMiddle.x,
-                        .y = building.position.y + targetTopLeftTileMiddle.y - fromTopLeftTileMiddle.y,
+                        .x = buildingPos.x + targetTopLeftTileMiddle.x - fromTopLeftTileMiddle.x,
+                        .y = buildingPos.y + targetTopLeftTileMiddle.y - fromTopLeftTileMiddle.y,
                     };
                     _ = try placeBigHouse(position, state, false, false);
                     continue :nextTile;
@@ -869,11 +886,14 @@ fn createChunk(chunkXY: ChunkXY, allocator: std.mem.Allocator, state: *main.Chat
     var mapChunk: MapChunk = .{
         .chunkXY = chunkXY,
         .buildings = std.ArrayList(Building).init(allocator),
+        .buildingsPos = std.ArrayList(main.Position).init(allocator),
         .bigBuildings = std.ArrayList(Building).init(allocator),
+        .bigBuildingsPos = std.ArrayList(main.Position).init(allocator),
         .trees = std.ArrayList(MapTree).init(allocator),
         .treesPos = std.ArrayList(main.Position).init(allocator),
         .potatoFields = std.ArrayList(PotatoField).init(allocator),
         .citizens = std.ArrayList(main.Citizen).init(allocator),
+        .citizensPos = std.ArrayList(main.Position).init(allocator),
         .buildOrders = std.ArrayList(BuildOrder).init(allocator),
         .pathes = std.ArrayList(main.Position).init(allocator),
         .pathingData = try main.pathfindingZig.createChunkData(chunkXY, allocator, state),
@@ -907,18 +927,22 @@ pub fn createSpawnChunk(allocator: std.mem.Allocator, state: *main.ChatSimState)
     var spawnChunk: MapChunk = .{
         .chunkXY = .{ .chunkX = 0, .chunkY = 0 },
         .buildings = std.ArrayList(Building).init(allocator),
+        .buildingsPos = std.ArrayList(main.Position).init(allocator),
         .bigBuildings = std.ArrayList(Building).init(allocator),
+        .bigBuildingsPos = std.ArrayList(main.Position).init(allocator),
         .trees = std.ArrayList(MapTree).init(allocator),
         .treesPos = std.ArrayList(main.Position).init(allocator),
         .potatoFields = std.ArrayList(PotatoField).init(allocator),
         .citizens = std.ArrayList(main.Citizen).init(allocator),
+        .citizensPos = std.ArrayList(main.Position).init(allocator),
         .buildOrders = std.ArrayList(BuildOrder).init(allocator),
         .pathes = std.ArrayList(main.Position).init(allocator),
         .pathingData = try main.pathfindingZig.createChunkData(.{ .chunkX = 0, .chunkY = 0 }, allocator, state),
         .queue = std.ArrayList(ChunkQueueItem).init(allocator),
     };
     const halveTileSize = GameMap.TILE_SIZE / 2;
-    try spawnChunk.buildings.append(.{ .position = .{ .x = halveTileSize, .y = halveTileSize }, .inConstruction = false, .type = BUILDING_TYPE_HOUSE, .citizensSpawned = 1 });
+    try spawnChunk.buildings.append(.{ .inConstruction = false, .type = BUILDING_TYPE_HOUSE, .citizensSpawned = 1 });
+    try spawnChunk.buildingsPos.append(.{ .x = halveTileSize, .y = halveTileSize });
     try spawnChunk.trees.append(.{ .fullyGrown = true });
     try spawnChunk.trees.append(.{ .fullyGrown = true });
     try spawnChunk.treesPos.append(.{ .x = GameMap.TILE_SIZE + halveTileSize, .y = halveTileSize });
@@ -926,6 +950,7 @@ pub fn createSpawnChunk(allocator: std.mem.Allocator, state: *main.ChatSimState)
     var citizen = main.Citizen.createCitizen(allocator);
     citizen.homePosition = .{ .x = halveTileSize, .y = halveTileSize };
     try spawnChunk.citizens.append(citizen);
+    try spawnChunk.citizensPos.append(.{ .x = 0, .y = 0 });
     state.citizenCounterLastTick = 1;
 
     const key = getKeyForChunkXY(spawnChunk.chunkXY);
