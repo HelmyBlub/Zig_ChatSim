@@ -1,6 +1,7 @@
 const std = @import("std");
 const main = @import("main.zig");
 const windowSdlZig = @import("windowSdl.zig");
+const imageZig = @import("image.zig");
 
 pub const GameMap = struct {
     chunks: std.HashMap(u64, MapChunk, U64HashMapContext, 30),
@@ -36,7 +37,7 @@ pub const MapChunk = struct {
     trees: std.ArrayList(MapTree),
     treesPos: std.ArrayList(main.Position),
     buildings: std.ArrayList(Building),
-    buildingsPos: std.ArrayList(main.Position),
+    buildingsPos: std.ArrayList(BuildingPosImageIndex),
     /// buildings bigger than one tile
     bigBuildings: std.ArrayList(Building),
     bigBuildingsPos: std.ArrayList(main.Position),
@@ -84,6 +85,11 @@ pub const MapTree = struct {
     growStartTimeMs: ?u32 = null,
     beginCuttingTime: ?u32 = null,
     regrow: bool = false,
+};
+
+pub const BuildingPosImageIndex = struct {
+    position: main.Position,
+    imageIndex: u8,
 };
 
 pub const Building = struct {
@@ -209,7 +215,7 @@ pub fn demolishAnythingOnPosition(position: main.Position, optEntireDemolishRect
         }
     }
     for (chunk.buildings.items, 0..) |*building, i| {
-        const buildingPos = chunk.buildingsPos.items[i];
+        const buildingPos = chunk.buildingsPos.items[i].position;
         if (main.calculateDistance(position, buildingPos) < GameMap.TILE_SIZE) {
             if (state.citizenCounter > 1 and building.citizensSpawned > 0) {
                 for (chunk.citizens.items, 0..) |citizen, j| {
@@ -294,7 +300,7 @@ pub fn getTileRectangleMiddlePosition(tileRectangle: MapTileRectangle) main.Posi
 pub fn getObjectOnPosition(position: main.Position, state: *main.ChatSimState) !?MapObject {
     const chunk = try getChunkAndCreateIfNotExistsForPosition(position, state);
     for (chunk.buildings.items, 0..) |*building, index| {
-        const buildingPos = chunk.buildingsPos.items[index];
+        const buildingPos = chunk.buildingsPos.items[index].position;
         if (main.calculateDistance(position, buildingPos) < GameMap.TILE_SIZE) {
             return .{ .building = .{ .building = building, .position = buildingPos } };
         }
@@ -379,7 +385,7 @@ pub fn isRectangleBuildable(buildRectangle: MapTileRectangle, state: *main.ChatS
         const chunk = try getChunkAndCreateIfNotExistsForChunkXY(chunkXysToCheck[chunkIndex].?, state);
         if (!ignore1TileBuildings) {
             for (chunk.buildingsPos.items) |buildingPos| {
-                if (is1x1ObjectOverlapping(buildingPos, buildRectangle)) {
+                if (is1x1ObjectOverlapping(buildingPos.position, buildRectangle)) {
                     return false;
                 }
             }
@@ -590,7 +596,7 @@ pub fn placeBuilding(building: Building, buildingPos: main.Position, state: *mai
             return false;
         }
         try chunk.buildings.append(building);
-        try chunk.buildingsPos.append(buildingPos);
+        try chunk.buildingsPos.append(.{ .position = buildingPos, .imageIndex = imageZig.IMAGE_WHITE_RECTANGLE });
         try chunk.buildOrders.append(.{ .position = buildingPos, .materialCount = 1 });
     }
     try addTickPosition(chunk.chunkXY, state);
@@ -783,8 +789,8 @@ pub fn removePotatoField(potatoIndex: usize, chunk: *MapChunk) void {
 pub fn getBuildingOnPosition(position: main.Position, state: *main.ChatSimState) !?struct { chunk: *MapChunk, buildingIndex: usize, isBigBuilding: bool, pos: main.Position } {
     const chunk = try getChunkAndCreateIfNotExistsForPosition(position, state);
     for (chunk.buildingsPos.items, 0..) |buildingPos, index| {
-        if (main.calculateDistance(position, buildingPos) < GameMap.TILE_SIZE) {
-            return .{ .chunk = chunk, .buildingIndex = index, .isBigBuilding = false, .pos = buildingPos };
+        if (main.calculateDistance(position, buildingPos.position) < GameMap.TILE_SIZE) {
+            return .{ .chunk = chunk, .buildingIndex = index, .isBigBuilding = false, .pos = buildingPos.position };
         }
     }
     for (chunk.bigBuildingsPos.items, 0..) |buildingPos, index| {
@@ -810,7 +816,7 @@ pub fn copyFromTo(fromTopLeftTileXY: TileXY, toTopLeftTileXY: TileXY, tileCountC
                 .y = targetTopLeftTileMiddle.y + @as(f32, @floatFromInt(y * GameMap.TILE_SIZE)),
             };
             for (chunk.buildingsPos.items) |buildingPos| {
-                if (main.calculateDistance(sourcePosition, buildingPos) < GameMap.TILE_SIZE) {
+                if (main.calculateDistance(sourcePosition, buildingPos.position) < GameMap.TILE_SIZE) {
                     _ = try placeHouse(targetPosition, state, false, false);
                     continue :nextTile;
                 }
@@ -886,7 +892,7 @@ fn createChunk(chunkXY: ChunkXY, allocator: std.mem.Allocator, state: *main.Chat
     var mapChunk: MapChunk = .{
         .chunkXY = chunkXY,
         .buildings = std.ArrayList(Building).init(allocator),
-        .buildingsPos = std.ArrayList(main.Position).init(allocator),
+        .buildingsPos = std.ArrayList(BuildingPosImageIndex).init(allocator),
         .bigBuildings = std.ArrayList(Building).init(allocator),
         .bigBuildingsPos = std.ArrayList(main.Position).init(allocator),
         .trees = std.ArrayList(MapTree).init(allocator),
@@ -927,7 +933,7 @@ pub fn createSpawnChunk(allocator: std.mem.Allocator, state: *main.ChatSimState)
     var spawnChunk: MapChunk = .{
         .chunkXY = .{ .chunkX = 0, .chunkY = 0 },
         .buildings = std.ArrayList(Building).init(allocator),
-        .buildingsPos = std.ArrayList(main.Position).init(allocator),
+        .buildingsPos = std.ArrayList(BuildingPosImageIndex).init(allocator),
         .bigBuildings = std.ArrayList(Building).init(allocator),
         .bigBuildingsPos = std.ArrayList(main.Position).init(allocator),
         .trees = std.ArrayList(MapTree).init(allocator),
@@ -942,7 +948,7 @@ pub fn createSpawnChunk(allocator: std.mem.Allocator, state: *main.ChatSimState)
     };
     const halveTileSize = GameMap.TILE_SIZE / 2;
     try spawnChunk.buildings.append(.{ .inConstruction = false, .type = BUILDING_TYPE_HOUSE, .citizensSpawned = 1 });
-    try spawnChunk.buildingsPos.append(.{ .x = halveTileSize, .y = halveTileSize });
+    try spawnChunk.buildingsPos.append(.{ .position = .{ .x = halveTileSize, .y = halveTileSize }, .imageIndex = imageZig.IMAGE_HOUSE });
     try spawnChunk.trees.append(.{ .fullyGrown = true });
     try spawnChunk.trees.append(.{ .fullyGrown = true });
     try spawnChunk.treesPos.append(.{ .x = GameMap.TILE_SIZE + halveTileSize, .y = halveTileSize });

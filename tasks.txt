@@ -1,5 +1,6 @@
 tasks:
 - check code for performance improvement for single cpu
+    - continue: use memcpy for vulkan data for citizens/buildings and decide if change worth the performance loss for zoomed in
     - paint stuff
         - citizens
         - building
@@ -39,6 +40,7 @@ Some data:
   FPS: 155, citizens: 30901, gameTime: 329648, end FPS: 103.1204
   FPS: 156, citizens: 31011, gameTime: 330096, end FPS: 112.827225 (with path changed)
   FPS: 154, citizens: 30775, gameTime: 329184, end FPS: 115.54597 (with tree changed)
+  FPS: 150, citizens: 30223, gameTime: 327184, end FPS: 111.291565 (with building)
 
 Goal:
 - a game which should not take more than 6month to make. Maybe publish to steam.

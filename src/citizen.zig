@@ -392,6 +392,7 @@ fn buildingFinished(citizen: *Citizen, citizenPos: main.Position, state: *main.C
             newCitizen.homePosition = buildingData.pos;
             try mapZig.placeCitizen(newCitizen, buildingData.pos, state);
             building.citizensSpawned += 1;
+            buildingData.chunk.buildingsPos.items[buildingData.buildingIndex].imageIndex = imageZig.IMAGE_HOUSE;
         } else if (building.type == mapZig.BUILDING_TYPE_BIG_HOUSE) {
             if (building.woodRequired == 0) {
                 building.inConstruction = false;

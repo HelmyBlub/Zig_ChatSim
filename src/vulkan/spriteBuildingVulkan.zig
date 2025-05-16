@@ -10,11 +10,11 @@ const imageZig = @import("../image.zig");
 const windowSdlZig = @import("../windowSdl.zig");
 const spritePathVulkanZig = @import("spritePathVulkan.zig");
 
-pub const VkTreeVertices = struct {
+pub const VkBuildingVertices = struct {
     graphicsPipeline: vk.VkPipeline = undefined,
     entityPaintCount: u32 = 0,
     nextEntityPaintCount: u32 = 0,
-    vertices: []spritePathVulkanZig.SpriteJustPosVertex = undefined,
+    vertices: []SpritePosAndImageVertex = undefined,
     vertexBufferSize: u64 = 0,
     vertexBuffer: vk.VkBuffer = undefined,
     vertexBufferMemory: vk.VkDeviceMemory = undefined,
@@ -23,31 +23,59 @@ pub const VkTreeVertices = struct {
     pub const SWITCH_TO_SIMPLE_ZOOM: f32 = 0.25;
 };
 
+pub const SpritePosAndImageVertex = struct {
+    pos: [2]f32,
+    imageIndex: u8,
+
+    pub fn getBindingDescription() vk.VkVertexInputBindingDescription {
+        const bindingDescription: vk.VkVertexInputBindingDescription = .{
+            .binding = 0,
+            .stride = @sizeOf(SpritePosAndImageVertex),
+            .inputRate = vk.VK_VERTEX_INPUT_RATE_VERTEX,
+        };
+
+        return bindingDescription;
+    }
+
+    pub fn getAttributeDescriptions() [2]vk.VkVertexInputAttributeDescription {
+        var attributeDescriptions: [2]vk.VkVertexInputAttributeDescription = .{ undefined, undefined };
+        attributeDescriptions[0].binding = 0;
+        attributeDescriptions[0].location = 0;
+        attributeDescriptions[0].format = vk.VK_FORMAT_R32G32_SFLOAT;
+        attributeDescriptions[0].offset = @offsetOf(SpritePosAndImageVertex, "pos");
+        attributeDescriptions[1].binding = 0;
+        attributeDescriptions[1].location = 1;
+        attributeDescriptions[1].format = vk.VK_FORMAT_R8_UINT;
+        attributeDescriptions[1].offset = @offsetOf(SpritePosAndImageVertex, "imageIndex");
+        return attributeDescriptions;
+    }
+};
+
 pub fn setupVertices(state: *main.ChatSimState, chunkVisible: mapZig.VisibleChunksData, generalIndex: *u32) !void {
     var vkState = &state.vkState;
-    const pathData = &vkState.trees;
+    const pathData = &vkState.building;
     const buffer = 500;
     pathData.entityPaintCount = pathData.nextEntityPaintCount;
     const pathCount = pathData.entityPaintCount + buffer;
 
     // recreate buffer with new size
-    if (vkState.trees.vertexBufferSize == 0) return;
-    if (vkState.trees.vertexBufferCleanUp[vkState.currentFrame] != null) {
-        vk.vkDestroyBuffer(vkState.logicalDevice, vkState.trees.vertexBufferCleanUp[vkState.currentFrame].?, null);
-        vk.vkFreeMemory(vkState.logicalDevice, vkState.trees.vertexBufferMemoryCleanUp[vkState.currentFrame].?, null);
-        vkState.trees.vertexBufferCleanUp[vkState.currentFrame] = null;
-        vkState.trees.vertexBufferMemoryCleanUp[vkState.currentFrame] = null;
+    if (vkState.building.vertexBufferSize == 0) return;
+    if (vkState.building.vertexBufferCleanUp[vkState.currentFrame] != null) {
+        vk.vkDestroyBuffer(vkState.logicalDevice, vkState.building.vertexBufferCleanUp[vkState.currentFrame].?, null);
+        vk.vkFreeMemory(vkState.logicalDevice, vkState.building.vertexBufferMemoryCleanUp[vkState.currentFrame].?, null);
+        vkState.building.vertexBufferCleanUp[vkState.currentFrame] = null;
+        vkState.building.vertexBufferMemoryCleanUp[vkState.currentFrame] = null;
     }
-    if ((vkState.trees.vertexBufferSize < pathCount or vkState.trees.vertexBufferSize -| paintVulkanZig.Vk_State.BUFFER_ADDITIOAL_SIZE * 2 > pathCount)) {
-        vkState.trees.vertexBufferCleanUp[vkState.currentFrame] = vkState.trees.vertexBuffer;
-        vkState.trees.vertexBufferMemoryCleanUp[vkState.currentFrame] = vkState.trees.vertexBufferMemory;
+    if ((vkState.building.vertexBufferSize < pathCount or vkState.building.vertexBufferSize -| paintVulkanZig.Vk_State.BUFFER_ADDITIOAL_SIZE * 2 > pathCount)) {
+        vkState.building.vertexBufferCleanUp[vkState.currentFrame] = vkState.building.vertexBuffer;
+        vkState.building.vertexBufferMemoryCleanUp[vkState.currentFrame] = vkState.building.vertexBufferMemory;
         try createVertexBuffer(vkState, pathCount, state.allocator);
     }
 
     var index: u32 = 0;
     var entitiesCounter: u32 = 0;
-    const max = vkState.trees.vertices.len;
-    const simple: bool = state.camera.zoom < VkTreeVertices.SWITCH_TO_SIMPLE_ZOOM;
+    const max = vkState.building.vertices.len;
+    const simple: bool = state.camera.zoom < VkBuildingVertices.SWITCH_TO_SIMPLE_ZOOM;
     for (0..chunkVisible.columns) |x| {
         for (0..chunkVisible.rows) |y| {
             const chunk = try mapZig.getChunkAndCreateIfNotExistsForChunkXY(
@@ -59,36 +87,25 @@ pub fn setupVertices(state: *main.ChatSimState, chunkVisible: mapZig.VisibleChun
             );
 
             if (simple) {
-                const len = chunk.treesPos.items.len;
+                const len = chunk.buildingsPos.items.len;
                 if (index + len < max) {
-                    const dest: [*]main.Position = @ptrCast(@alignCast(vkState.trees.vertices[index..(index + len)]));
-                    @memcpy(dest, chunk.treesPos.items[0..len]);
+                    const dest: [*]mapZig.BuildingPosImageIndex = @ptrCast(@alignCast(vkState.building.vertices[index..(index + len)]));
+                    @memcpy(dest, chunk.buildingsPos.items[0..len]);
                     entitiesCounter += @intCast(len);
                 }
                 index += @intCast(len);
             } else {
-                for (chunk.trees.items, 0..) |*tree, treeIndex| {
-                    var size: u8 = mapZig.GameMap.TILE_SIZE;
-                    var imageIndex: u8 = imageZig.IMAGE_GREEN_RECTANGLE;
-                    if (tree.fullyGrown) {
-                        imageIndex = imageZig.IMAGE_TREE;
-                    } else if (tree.growStartTimeMs) |time| {
-                        size = @intCast(@divFloor(mapZig.GameMap.TILE_SIZE * (state.gameTimeMs - time), mapZig.GROW_TIME_MS));
-                        imageIndex = imageZig.IMAGE_TREE;
+                for (chunk.buildings.items, 0..) |*building, buildingIndex| {
+                    const buildingPos = chunk.buildingsPos.items[buildingIndex].position;
+                    var imageIndex: u8 = imageZig.IMAGE_WHITE_RECTANGLE;
+                    var cutY: f32 = 0;
+                    if (!building.inConstruction) {
+                        imageIndex = imageZig.IMAGE_HOUSE;
+                    } else if (building.constructionStartedTime) |time| {
+                        imageIndex = imageZig.IMAGE_HOUSE;
+                        cutY = @max(1 - @as(f32, @floatFromInt(state.gameTimeMs - time)) / 3000.0, 0);
                     }
-                    var rotate: f32 = 0;
-                    if (tree.beginCuttingTime) |cutTime| {
-                        const fallTime = main.CITIZEN_TREE_CUT_PART2_DURATION_TREE_FALLING;
-                        const startFalling = main.CITIZEN_TREE_CUT_PART1_DURATION;
-                        const timePassed = state.gameTimeMs - cutTime;
-                        if (timePassed > startFalling) {
-                            const fallingTimePerCent = @min(@as(f32, @floatFromInt(timePassed - startFalling)) / fallTime, 1);
-                            const fallingAngle = std.math.pow(f32, fallingTimePerCent, 3.0) * std.math.pi / 2.0;
-                            rotate = fallingAngle;
-                        }
-                    }
-                    const treePos = chunk.treesPos.items[treeIndex];
-                    vkState.vertices[generalIndex.*] = .{ .pos = .{ treePos.x, treePos.y }, .imageIndex = imageIndex, .size = size, .rotate = rotate, .cutY = 0 };
+                    vkState.vertices[generalIndex.*] = .{ .pos = .{ buildingPos.x, buildingPos.y }, .imageIndex = imageIndex, .size = mapZig.GameMap.TILE_SIZE, .rotate = 0, .cutY = cutY };
                     generalIndex.* += 1;
                 }
             }
@@ -101,19 +118,19 @@ pub fn setupVertices(state: *main.ChatSimState, chunkVisible: mapZig.VisibleChun
 
 pub fn recordCommandBuffer(commandBuffer: vk.VkCommandBuffer, state: *main.ChatSimState) !void {
     const vkState = &state.vkState;
-    vk.vkCmdBindPipeline(commandBuffer, vk.VK_PIPELINE_BIND_POINT_GRAPHICS, vkState.trees.graphicsPipeline);
-    const vertexBuffers: [1]vk.VkBuffer = .{vkState.trees.vertexBuffer};
+    vk.vkCmdBindPipeline(commandBuffer, vk.VK_PIPELINE_BIND_POINT_GRAPHICS, vkState.building.graphicsPipeline);
+    const vertexBuffers: [1]vk.VkBuffer = .{vkState.building.vertexBuffer};
     const offsets: [1]vk.VkDeviceSize = .{0};
     vk.vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertexBuffers[0], &offsets[0]);
-    vk.vkCmdDraw(commandBuffer, @intCast(vkState.trees.entityPaintCount), 1, 0, 0);
+    vk.vkCmdDraw(commandBuffer, @intCast(vkState.building.entityPaintCount), 1, 0, 0);
 }
 
 pub fn init(state: *main.ChatSimState) !void {
-    state.vkState.trees.vertexBufferCleanUp = try state.allocator.alloc(?vk.VkBuffer, paintVulkanZig.Vk_State.MAX_FRAMES_IN_FLIGHT);
-    state.vkState.trees.vertexBufferMemoryCleanUp = try state.allocator.alloc(?vk.VkDeviceMemory, paintVulkanZig.Vk_State.MAX_FRAMES_IN_FLIGHT);
+    state.vkState.building.vertexBufferCleanUp = try state.allocator.alloc(?vk.VkBuffer, paintVulkanZig.Vk_State.MAX_FRAMES_IN_FLIGHT);
+    state.vkState.building.vertexBufferMemoryCleanUp = try state.allocator.alloc(?vk.VkDeviceMemory, paintVulkanZig.Vk_State.MAX_FRAMES_IN_FLIGHT);
     for (0..paintVulkanZig.Vk_State.MAX_FRAMES_IN_FLIGHT) |i| {
-        state.vkState.trees.vertexBufferCleanUp[i] = null;
-        state.vkState.trees.vertexBufferMemoryCleanUp[i] = null;
+        state.vkState.building.vertexBufferCleanUp[i] = null;
+        state.vkState.building.vertexBufferMemoryCleanUp[i] = null;
     }
     try createGraphicsPipeline(&state.vkState, state.allocator);
     try createVertexBuffer(&state.vkState, 10, state.allocator);
@@ -121,46 +138,46 @@ pub fn init(state: *main.ChatSimState) !void {
 
 pub fn destroy(vkState: *paintVulkanZig.Vk_State, allocator: std.mem.Allocator) void {
     for (0..paintVulkanZig.Vk_State.MAX_FRAMES_IN_FLIGHT) |i| {
-        if (vkState.trees.vertexBufferSize != 0 and vkState.trees.vertexBufferCleanUp[i] != null) {
-            vk.vkDestroyBuffer(vkState.logicalDevice, vkState.trees.vertexBufferCleanUp[i].?, null);
-            vk.vkFreeMemory(vkState.logicalDevice, vkState.trees.vertexBufferMemoryCleanUp[i].?, null);
-            vkState.trees.vertexBufferCleanUp[i] = null;
-            vkState.trees.vertexBufferMemoryCleanUp[i] = null;
+        if (vkState.building.vertexBufferSize != 0 and vkState.building.vertexBufferCleanUp[i] != null) {
+            vk.vkDestroyBuffer(vkState.logicalDevice, vkState.building.vertexBufferCleanUp[i].?, null);
+            vk.vkFreeMemory(vkState.logicalDevice, vkState.building.vertexBufferMemoryCleanUp[i].?, null);
+            vkState.building.vertexBufferCleanUp[i] = null;
+            vkState.building.vertexBufferMemoryCleanUp[i] = null;
         }
     }
 
-    vk.vkDestroyBuffer(vkState.logicalDevice, vkState.trees.vertexBuffer, null);
-    vk.vkFreeMemory(vkState.logicalDevice, vkState.trees.vertexBufferMemory, null);
-    vk.vkDestroyPipeline(vkState.logicalDevice, vkState.trees.graphicsPipeline, null);
-    allocator.free(vkState.trees.vertices);
-    allocator.free(vkState.trees.vertexBufferCleanUp);
-    allocator.free(vkState.trees.vertexBufferMemoryCleanUp);
+    vk.vkDestroyBuffer(vkState.logicalDevice, vkState.building.vertexBuffer, null);
+    vk.vkFreeMemory(vkState.logicalDevice, vkState.building.vertexBufferMemory, null);
+    vk.vkDestroyPipeline(vkState.logicalDevice, vkState.building.graphicsPipeline, null);
+    allocator.free(vkState.building.vertices);
+    allocator.free(vkState.building.vertexBufferCleanUp);
+    allocator.free(vkState.building.vertexBufferMemoryCleanUp);
 }
 
 fn setupVertexDataForGPU(vkState: *paintVulkanZig.Vk_State) !void {
     var data: ?*anyopaque = undefined;
-    if (vk.vkMapMemory(vkState.logicalDevice, vkState.trees.vertexBufferMemory, 0, @sizeOf(spritePathVulkanZig.SpriteJustPosVertex) * vkState.trees.vertices.len, 0, &data) != vk.VK_SUCCESS) return error.MapMemory;
-    const gpu_vertices: [*]spritePathVulkanZig.SpriteJustPosVertex = @ptrCast(@alignCast(data));
-    @memcpy(gpu_vertices, vkState.trees.vertices[0..]);
-    vk.vkUnmapMemory(vkState.logicalDevice, vkState.trees.vertexBufferMemory);
+    if (vk.vkMapMemory(vkState.logicalDevice, vkState.building.vertexBufferMemory, 0, @sizeOf(SpritePosAndImageVertex) * vkState.building.vertices.len, 0, &data) != vk.VK_SUCCESS) return error.MapMemory;
+    const gpu_vertices: [*]SpritePosAndImageVertex = @ptrCast(@alignCast(data));
+    @memcpy(gpu_vertices, vkState.building.vertices[0..]);
+    vk.vkUnmapMemory(vkState.logicalDevice, vkState.building.vertexBufferMemory);
 }
 
 fn createVertexBuffer(vkState: *paintVulkanZig.Vk_State, entityCount: u64, allocator: std.mem.Allocator) !void {
-    if (vkState.trees.vertexBufferSize != 0) allocator.free(vkState.trees.vertices);
-    vkState.trees.vertexBufferSize = entityCount + paintVulkanZig.Vk_State.BUFFER_ADDITIOAL_SIZE;
-    vkState.trees.vertices = try allocator.alloc(spritePathVulkanZig.SpriteJustPosVertex, vkState.trees.vertexBufferSize);
+    if (vkState.building.vertexBufferSize != 0) allocator.free(vkState.building.vertices);
+    vkState.building.vertexBufferSize = entityCount + paintVulkanZig.Vk_State.BUFFER_ADDITIOAL_SIZE;
+    vkState.building.vertices = try allocator.alloc(SpritePosAndImageVertex, vkState.building.vertexBufferSize);
     try paintVulkanZig.createBuffer(
-        @sizeOf(spritePathVulkanZig.SpriteJustPosVertex) * vkState.trees.vertexBufferSize,
+        @sizeOf(SpritePosAndImageVertex) * vkState.building.vertexBufferSize,
         vk.VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         vk.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | vk.VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        &vkState.trees.vertexBuffer,
-        &vkState.trees.vertexBufferMemory,
+        &vkState.building.vertexBuffer,
+        &vkState.building.vertexBufferMemory,
         vkState,
     );
 }
 
 fn createGraphicsPipeline(vkState: *paintVulkanZig.Vk_State, allocator: std.mem.Allocator) !void {
-    const vertShaderCode = try paintVulkanZig.readShaderFile("shaders/compiled/spriteTreeWithGlobalTransformVert.spv", allocator);
+    const vertShaderCode = try paintVulkanZig.readShaderFile("shaders/compiled/spriteBuildingWithGlobalTransformVert.spv", allocator);
     defer allocator.free(vertShaderCode);
     const fragShaderCode = try paintVulkanZig.readShaderFile("shaders/compiled/imageFrag.spv", allocator);
     defer allocator.free(fragShaderCode);
@@ -195,8 +212,8 @@ fn createGraphicsPipeline(vkState: *paintVulkanZig.Vk_State, allocator: std.mem.
     };
 
     const shaderStages = [_]vk.VkPipelineShaderStageCreateInfo{ vertShaderStageInfo, fragShaderStageInfo, geomShaderStageInfo };
-    const bindingDescription = spritePathVulkanZig.SpriteJustPosVertex.getBindingDescription();
-    const attributeDescriptions = spritePathVulkanZig.SpriteJustPosVertex.getAttributeDescriptions();
+    const bindingDescription = SpritePosAndImageVertex.getBindingDescription();
+    const attributeDescriptions = SpritePosAndImageVertex.getAttributeDescriptions();
     var vertexInputInfo = vk.VkPipelineVertexInputStateCreateInfo{
         .sType = vk.VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
         .vertexBindingDescriptionCount = 1,
@@ -305,5 +322,5 @@ fn createGraphicsPipeline(vkState: *paintVulkanZig.Vk_State, allocator: std.mem.
         .pNext = null,
         .pDepthStencilState = &vkState.depthStencil,
     };
-    if (vk.vkCreateGraphicsPipelines(vkState.logicalDevice, null, 1, &pipelineInfo, null, &vkState.trees.graphicsPipeline) != vk.VK_SUCCESS) return error.FailedToCreateGraphicsPipeline;
+    if (vk.vkCreateGraphicsPipelines(vkState.logicalDevice, null, 1, &pipelineInfo, null, &vkState.building.graphicsPipeline) != vk.VK_SUCCESS) return error.FailedToCreateGraphicsPipeline;
 }

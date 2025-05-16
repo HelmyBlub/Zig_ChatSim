@@ -9,6 +9,9 @@ C:/Zeugs/VulkanSDK/1.4.304.1/Bin/glslc.exe shaders/citizenComplexShader.vert -o 
 C:/Zeugs/VulkanSDK/1.4.304.1/Bin/glslc.exe shaders/citizenComplexShader.geom -o shaders/compiled/citizenGeom.spv
 C:/Zeugs/VulkanSDK/1.4.304.1/Bin/glslc.exe shaders/spritePathWithGlobalTransformShader.vert -o shaders/compiled/spritePathWithGlobalTransformVert.spv
 C:/Zeugs/VulkanSDK/1.4.304.1/Bin/glslc.exe shaders/spriteTreeWithGlobalTransformShader.vert -o shaders/compiled/spriteTreeWithGlobalTransformVert.spv
+C:/Zeugs/VulkanSDK/1.4.304.1/Bin/glslc.exe shaders/spriteBuildingWithGlobalTransformShader.vert -o shaders/compiled/spriteBuildingWithGlobalTransformVert.spv
+C:/Zeugs/VulkanSDK/1.4.304.1/Bin/glslc.exe shaders/spriteBigBuildingWithGlobalTransformShader.vert -o shaders/compiled/spriteBigBuildingWithGlobalTransformVert.spv
+C:/Zeugs/VulkanSDK/1.4.304.1/Bin/glslc.exe shaders/spriteCitizenWithGlobalTransformShader.vert -o shaders/compiled/spriteCitizenWithGlobalTransformVert.spv
 
 C:/Zeugs/VulkanSDK/1.4.304.1/Bin/glslc.exe shaders/rectangleShader.vert -o shaders/compiled/rectangleVert.spv
 C:/Zeugs/VulkanSDK/1.4.304.1/Bin/glslc.exe shaders/rectangleShader.frag -o shaders/compiled/rectangleFrag.spv
